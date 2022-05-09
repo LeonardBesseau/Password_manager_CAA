@@ -1,3 +1,5 @@
+extern crate core;
+
 mod register;
 mod common;
 mod input;
@@ -13,7 +15,7 @@ use crate::login::{login, LoginResult};
 
 
 fn secure_mode(path: &str) -> Result<(), Box<dyn Error>> {
-    let (username, user_file, master_key) = match login(path)? {
+    let (user_file, master_key) = match login(path)? {
         (LoginResult::EarlyAbort, _) => { return Ok(()); }
         (LoginResult::Invalid, _) => {
             println!("The username/password given are invalid !");
@@ -25,7 +27,7 @@ fn secure_mode(path: &str) -> Result<(), Box<dyn Error>> {
         (LoginResult::Success, Some(t)) => t
     };
 
-    secure_menu::secure_menu(path, username.as_str(), user_file, master_key)
+    secure_menu::secure_menu(path, user_file, master_key)
 }
 
 const PATH: &str = "files";

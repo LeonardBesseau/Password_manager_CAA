@@ -2,8 +2,9 @@ use secrecy::{ExposeSecret, SecretString, SecretVec, Zeroize};
 use argon2::{password_hash::{
     PasswordHasher, SaltString,
 }, Argon2, ParamsBuilder, Algorithm, Version};
+use hkdf::Hkdf;
 use rand_core::{OsRng, RngCore};
-use sha2::{Sha512, Digest};
+use sha2::Sha512;
 
 pub type EncryptedData = Vec<u8>;
 pub type SecretKey = SecretVec<u8>;
@@ -23,11 +24,13 @@ pub fn get_master_key(master_password: SecretString, salt: SaltString) -> Secret
     SecretVec::new(Vec::from(master_key.as_bytes()))
 }
 
-pub fn compute_hash(master_key: &SecretVec<u8>) -> String {
-    let mut hasher = Sha512::new();
-    hasher.update(&master_key.expose_secret());
-    let hash = hasher.finalize();
-    hex::encode(hash)
+pub fn compute_hash(username: &str, master_key: &SecretVec<u8>) -> String {
+    let hk = Hkdf::<Sha512>::new(None, master_key.expose_secret());
+    let mut output = [0u8; 42];
+    let mut info = String::from(username);
+    info.push_str("Master-key_verification");
+    hk.expand(info.as_ref(), &mut output).unwrap();
+    hex::encode(output)
 }
 
 pub fn generate_password_key() -> SecretKey {

@@ -16,12 +16,21 @@ pub enum UserFileError {
     Serialisation(bincode::Error),
 }
 
+pub trait Lockable<T: Unlockable<Self>>: Sized {
+    fn lock(&self, key: &SecretKey) -> Result<T, UserFileError>;
+}
 
-#[derive(Serialize, Deserialize, Debug)]
+pub trait Unlockable<T: Lockable<Self>>: Sized {
+    fn unlock(&self, key: &SecretKey) -> Result<T, UserFileError>;
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublicData {
     pub nonce: Nonce,
     pub salt: Salt,
     pub hash: String,
+    pub username: String,
 }
 
 
@@ -104,10 +113,10 @@ impl Zeroize for PrivateDataSerialize {
 
 
 impl PrivateData {
-    fn convert(self) -> PrivateDataSerialize {
+    fn convert(&self) -> PrivateDataSerialize {
         PrivateDataSerialize {
             password_key: <[u8; 32]>::try_from(self.password_key.expose_secret().as_slice()).unwrap(),
-            passwords: self.passwords,
+            passwords: self.passwords.clone(),
         }
     }
 
@@ -116,34 +125,9 @@ impl PrivateData {
     }
 }
 
-
-impl PasswordEntryUnlocked {
-    fn lock(self, password_key: &SecretKey) -> Result<PasswordEntryLocked, UserFileError> {
-        let key = Key::from_slice(password_key.expose_secret().as_slice());
-        let nonce = generate_nonce();
-        let aead = XChaCha20Poly1305::new(&key);
-        // TODO ask if padding for password is necessary (Assuming that adversary knows site name and username then password length is known)
-        let ciphertext = aead.encrypt(XNonce::from_slice(nonce.as_slice()), self.password.expose_secret().as_bytes())?;
-        Ok(PasswordEntryLocked {
-            site: self.site,
-            nonce,
-            username: self.username,
-            password: ciphertext,
-        })
-    }
-
-    fn new(site: &str, username: &str, password: SecretString) -> Self {
-        PasswordEntryUnlocked {
-            site: String::from(site),
-            username: String::from(username),
-            password,
-        }
-    }
-}
-
-impl PasswordEntryLocked {
-    fn unlock(self, password_key: &SecretKey) -> Result<PasswordEntryUnlocked, UserFileError> {
-        let key = Key::from_slice(password_key.expose_secret().as_slice());
+impl Unlockable<PasswordEntryUnlocked> for PasswordEntryLocked {
+    fn unlock(&self, key: &SecretKey) -> Result<PasswordEntryUnlocked, UserFileError> {
+        let key = Key::from_slice(key.expose_secret().as_slice());
         let nonce = XNonce::from_slice(self.nonce.as_slice());
         let aead = XChaCha20Poly1305::new(&key);
 
@@ -152,10 +136,37 @@ impl PasswordEntryLocked {
         let secret = SecretString::from(String::from_utf8(plaintext).unwrap());
 
         Ok(PasswordEntryUnlocked {
-            site: self.site,
-            username: self.username,
+            site: self.site.clone(),
+            username: self.username.clone(),
             password: secret,
         })
+    }
+}
+
+impl Lockable<PasswordEntryLocked> for PasswordEntryUnlocked {
+    fn lock(&self, key: &SecretKey) -> Result<PasswordEntryLocked, UserFileError> {
+        let key = Key::from_slice(key.expose_secret().as_slice());
+        let nonce = generate_nonce();
+        let aead = XChaCha20Poly1305::new(&key);
+        // TODO ask if padding for password is necessary (Assuming that adversary knows site name and username then password length is known)
+        let ciphertext = aead.encrypt(XNonce::from_slice(nonce.as_slice()), self.password.expose_secret().as_bytes())?;
+        Ok(PasswordEntryLocked {
+            site: self.site.clone(),
+            nonce,
+            username: self.username.clone(),
+            password: ciphertext,
+        })
+    }
+}
+
+
+impl PasswordEntryUnlocked {
+    fn new(site: &str, username: &str, password: SecretString) -> Self {
+        PasswordEntryUnlocked {
+            site: String::from(site),
+            username: String::from(username),
+            password,
+        }
     }
 }
 
@@ -167,10 +178,26 @@ impl Zeroize for PasswordEntryLocked {
     }
 }
 
+impl Unlockable<UserFileUnlocked> for UserFileLocked {
+    fn unlock(&self, key: &SecretKey) -> Result<UserFileUnlocked, UserFileError> {
+        let key = Key::from_slice(key.expose_secret().as_slice());
+        let nonce = XNonce::from_slice(self.public.nonce.as_slice());
+        let aead = XChaCha20Poly1305::new(&key);
+
+        let public_data = bincode::serialize(&self.public)?;
+
+        let plaintext = aead.decrypt(nonce, Payload { msg: self.private.as_slice(), aad: public_data.as_slice() })?;
+
+        let passwords: PrivateDataSerialize = bincode::deserialize(&plaintext)?;
+
+        Ok(UserFileUnlocked { public: self.public.clone(), private: passwords.convert() })
+    }
+}
+
 
 impl UserFileLocked {
     pub fn verify(&self, master_key: &SecretKey) -> bool {
-        constant_time_eq(compute_hash(master_key).as_bytes(), self.public.hash.as_bytes())
+        constant_time_eq(compute_hash(self.public.username.as_str(), master_key).as_bytes(), self.public.hash.as_bytes())
     }
 
     pub fn unlock(self, master_key: &SecretKey) -> Result<UserFileUnlocked, UserFileError> {
@@ -188,13 +215,10 @@ impl UserFileLocked {
     }
 }
 
-impl UserFileUnlocked {
-    pub fn new(public_data: PublicData, private_data: PrivateData) -> Self {
-        UserFileUnlocked { public: public_data, private: private_data }
-    }
 
-    pub fn lock(self, master_key: &SecretKey) -> Result<UserFileLocked, UserFileError> {
-        let key = Key::from_slice(master_key.expose_secret().as_slice());
+impl Lockable<UserFileLocked> for UserFileUnlocked {
+    fn lock(&self, key: &SecretKey) -> Result<UserFileLocked, UserFileError> {
+        let key = Key::from_slice(key.expose_secret().as_slice());
         let nonce = XNonce::from_slice(self.public.nonce.as_slice());
         let aead = XChaCha20Poly1305::new(&key);
 
@@ -203,7 +227,13 @@ impl UserFileUnlocked {
 
         let ciphertext = aead.encrypt(nonce, Payload { msg: private_data.as_slice(), aad: public_data.as_slice() })?;
 
-        Ok(UserFileLocked { public: self.public, private: ciphertext })
+        Ok(UserFileLocked { public: self.public.clone(), private: ciphertext })
+    }
+}
+
+impl UserFileUnlocked {
+    pub fn new(public_data: PublicData, private_data: PrivateData) -> Self {
+        UserFileUnlocked { public: public_data, private: private_data }
     }
 
     pub fn get_password_list(&self) -> &Vec<PasswordEntryLocked> {
@@ -216,17 +246,18 @@ impl UserFileUnlocked {
         Ok(())
     }
 
-    pub fn get_password(&self, index: usize) -> Result<PasswordEntryUnlocked, UserFileError>{
+    pub fn get_password(&self, index: usize) -> Result<PasswordEntryUnlocked, UserFileError> {
         self.private.passwords.get(index).unwrap().clone().unlock(&self.private.password_key)
     }
 }
 
 impl PublicData {
-    pub fn new(nonce: [u8; 24], salt: [u8; 16], hash: String) -> Self {
+    pub fn new(nonce: [u8; 24], salt: [u8; 16], hash: String, username: &String) -> Self {
         PublicData {
             nonce,
             salt,
             hash,
+            username: username.clone(),
         }
     }
 }

@@ -12,7 +12,7 @@ pub enum LoginResult {
     Success,
 }
 
-pub fn login(path: &str) -> Result<(LoginResult, Option<(String, UserFileUnlocked, SecretKey)>), Box<dyn Error>> {
+pub fn login(path: &str) -> Result<(LoginResult, Option<(UserFileUnlocked, SecretKey)>), Box<dyn Error>> {
     let mut username;
     loop {
         let user_input = ask_for_username();
@@ -47,5 +47,5 @@ pub fn login(path: &str) -> Result<(LoginResult, Option<(String, UserFileUnlocke
     // Verify auth and decrypt
     let user_file = user_file.unlock(&master_key)?;
 
-    Ok((Success, Some((username, user_file, master_key))))
+    Ok((Success, Some((user_file, master_key))))
 }
