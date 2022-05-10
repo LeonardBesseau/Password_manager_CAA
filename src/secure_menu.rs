@@ -6,11 +6,11 @@ use read_input::prelude::input;
 use secrecy::{ExposeSecret, SecretString};
 use zxcvbn::zxcvbn;
 use crate::common::save_user_file;
-use crate::file_access::{read_shared_file, read_user_file, user_file_exists, write_shared_file};
+use crate::file_access::{read_user_file, user_file_exists, write_shared_file};
 use crate::input::{ask_for, ask_for_password};
 use crate::password::{SecretKey};
 use crate::shared_file::SharedPassword;
-use crate::user_file::{Lockable, PasswordEntryLocked, Unlockable, UserFileUnlocked};
+use crate::user_file::{UserFileUnlocked};
 
 fn add_password(path: &str, user_file: &mut UserFileUnlocked, master_key: &SecretKey) -> Result<(), Box<dyn Error>> {
     let site = match ask_for("Please enter a site") {
@@ -27,7 +27,7 @@ fn add_password(path: &str, user_file: &mut UserFileUnlocked, master_key: &Secre
         Some(s) => s
     };
 
-    user_file.add_password(site.as_str(), username.as_str(), password)?;
+    user_file.add_password(site.as_str(), username.as_str(), password, None)?;
     // TODO manage error
     save_user_file(&path, user_file, &master_key)?;
     println!("Password added successfully");
@@ -37,7 +37,11 @@ fn add_password(path: &str, user_file: &mut UserFileUnlocked, master_key: &Secre
 fn select_password_entry(user_file: &UserFileUnlocked) -> Option<usize> {
     let entries = user_file.get_password_list();
     for (i, entry) in entries.iter().enumerate() {
-        println!("{} - {}", i + 1, entry.site);
+        print!("{} - {}", i + 1, &entry.site);
+        if entry.shared_by.is_some() {
+            print!(" | Shared by {}", entry.shared_by.as_ref().unwrap());
+        }
+        println!();
     }
     loop {
         let selected = input::<usize>().repeat_msg("Please select a site to display its password or 0 to return to the previous screen\n"
@@ -69,8 +73,9 @@ fn share_password(path: &str, user_file: &UserFileUnlocked) -> Result<(), Box<dy
         None => { return Ok(()); }
         Some(e) => { e }
     };
-    let data = user_file.get_password(selected_entry)?;
-    let shared = SharedPassword::new(&user_file.public.username, data)?;
+    let mut data = user_file.get_password(selected_entry)?;
+    data.shared_by = Some(user_file.public.username.clone());
+    let shared = SharedPassword::new(data)?;
     let shared = bincode::serialize(&shared)?;
     let mut username;
     loop {
@@ -89,39 +94,6 @@ fn share_password(path: &str, user_file: &UserFileUnlocked) -> Result<(), Box<dy
     let output = ecies_ed25519::encrypt(&target_user_file.public.public_key, shared.as_slice(), &mut csprng)?;
     write_shared_file(path, username.as_str(), output)?;
     println!("Password shared !!!");
-    Ok(())
-}
-
-
-fn select_shared_password_entry(entries: &Vec<SharedPassword>) -> Option<usize> {
-    for (i, entry) in entries.iter().enumerate() {
-        println!("{} - {}, shared by {}", i + 1, entry.get_site(), entry.shared_by);
-    }
-    loop {
-        let selected = input::<usize>().repeat_msg("Please select a site to display its password or 0 to return to the previous screen\n"
-        ).min(0).get();
-        if selected == 0 {
-            return None;
-        } else if selected > entries.len() {
-            println!("The demanded site does not exists. Please stay in the range 0-{}", entries.len());
-        } else {
-            return Some(selected - 1);
-        }
-    }
-}
-
-fn show_shared_password(path: &str, user_file: &UserFileUnlocked) -> Result<(), Box<dyn Error>> {
-    let entries = read_shared_file(path, &user_file.public.username, user_file.get_private_key())?;
-    let selected_entry = match select_shared_password_entry(&entries) {
-        None => { return Ok(()); }
-        Some(e) => { e }
-    };
-    let entry = &entries.get(selected_entry).unwrap();
-    let data = entry.get_password()?;
-    println!("Password shared by {}", entry.shared_by);
-    println!("Site: {}", data.site);
-    println!("Username: {}", data.username);
-    println!("Password: {}", &data.password.expose_secret());
     Ok(())
 }
 
@@ -232,12 +204,11 @@ pub(crate) fn secure_menu(path: &str, mut user_file: UserFileUnlocked, master_ke
         \n1 - Add password\
         \n2 - Show password\
         \n3 - Share password\
-        \n4 - Show password shared with me\
-        \n5 - Verify password strength\
-        \n6 - Generate password\
-        \n7 - Change master password\
+        \n4 - Verify password strength\
+        \n5 - Generate password\
+        \n6 - Change master password\
         \n"
-        ).min_max(0, 7).get() {
+        ).min_max(0, 6).get() {
             0 => {
                 println!("Goodbye {}!", user_file.public.username);
                 return Ok(());
@@ -245,7 +216,6 @@ pub(crate) fn secure_menu(path: &str, mut user_file: UserFileUnlocked, master_ke
             1 => add_password(path, &mut user_file, &master_key)?,
             2 => show_password(&user_file)?,
             3 => share_password(path, &user_file)?,
-            4 => show_shared_password(path, &user_file)?,
             5 => verify_password_strength(),
             6 => generate_password_menu(),
             7 => {

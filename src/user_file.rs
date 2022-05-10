@@ -47,13 +47,14 @@ pub struct PasswordEntryLocked {
     nonce: Nonce,
     username: String,
     password: EncryptedData,
-    // TODO add shared_by
+    pub shared_by: Option<String>,
 }
 
 pub struct PasswordEntryUnlocked {
     pub site: String,
     pub username: String,
     pub password: SecretString,
+    pub shared_by: Option<String>,
 }
 
 pub struct PrivateData {
@@ -262,6 +263,7 @@ impl Unlockable<PasswordEntryUnlocked> for PasswordEntryLocked {
             site: self.site.clone(),
             username: self.username.clone(),
             password: secret,
+            shared_by: self.shared_by.clone()
         })
     }
 }
@@ -278,17 +280,19 @@ impl Lockable<PasswordEntryLocked> for PasswordEntryUnlocked {
             nonce,
             username: self.username.clone(),
             password: ciphertext,
+            shared_by: self.shared_by.clone()
         })
     }
 }
 
 
 impl PasswordEntryUnlocked {
-    fn new(site: &str, username: &str, password: SecretString) -> Self {
+    fn new(site: &str, username: &str, password: SecretString, shared_by: Option<String>) -> Self {
         PasswordEntryUnlocked {
             site: String::from(site),
             username: String::from(username),
             password,
+            shared_by
         }
     }
 }
@@ -349,8 +353,8 @@ impl UserFileUnlocked {
         &self.private.passwords
     }
 
-    pub fn add_password(&mut self, site: &str, username: &str, password: SecretString) -> Result<(), UserFileError> {
-        let entry = PasswordEntryUnlocked::new(site, username, password).lock(&self.private.password_key)?;
+    pub fn add_password(&mut self, site: &str, username: &str, password: SecretString, shared_by: Option<String>) -> Result<(), UserFileError> {
+        let entry = PasswordEntryUnlocked::new(site, username, password, shared_by).lock(&self.private.password_key)?;
         self.private.passwords.push(entry);
         Ok(())
     }

@@ -3,7 +3,7 @@ use argon2::password_hash::SaltString;
 use rand_core::{OsRng};
 use crate::common::save_user_file;
 use crate::input::{ask_for_password, ask_for_username};
-use crate::password::{compute_hash, generate_nonce, generate_password_key, get_master_key};
+use crate::password::{compute_hash, generate_password_key, get_master_key};
 use crate::file_access::{create_user_directory, user_file_exists};
 use crate::user_file::{PrivateData, PublicData, UserFileUnlocked};
 

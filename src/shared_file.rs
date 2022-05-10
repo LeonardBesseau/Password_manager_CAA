@@ -8,20 +8,15 @@ use crate::password::{generate_password_key, SecretKey};
 use crate::user_file::{Lockable, PasswordEntryLocked, PasswordEntryUnlocked, Unlockable};
 
 pub struct SharedPassword {
-    pub shared_by: String,
     password: PasswordEntryLocked,
     password_key: SecretKey,
 }
 
 impl SharedPassword {
-    pub fn new(shared_by: &String, password: PasswordEntryUnlocked) -> Result<Self, Box<dyn Error>> {
+    pub fn new(password: PasswordEntryUnlocked) -> Result<Self, Box<dyn Error>> {
         let password_key = generate_password_key();
         let password = password.lock(&password_key)?;
-        Ok(SharedPassword { shared_by: shared_by.clone(), password, password_key })
-    }
-
-    pub fn get_site(&self) -> &str {
-        &self.password.site
+        Ok(SharedPassword {password, password_key })
     }
 
     pub fn get_password(&self) -> Result<PasswordEntryUnlocked, Box<dyn Error>> {
@@ -34,7 +29,6 @@ impl Serialize for SharedPassword {
         where
             S: Serializer {
         let mut state = serializer.serialize_struct("SharedPassword", 3)?;
-        state.serialize_field("shared_by", &self.shared_by)?;
         state.serialize_field("password", &self.password)?;
         state.serialize_field("password_key", &self.password_key.expose_secret())?;
         state.end()
@@ -48,7 +42,6 @@ impl<'de> Deserialize<'de> for SharedPassword {
             D: Deserializer<'de>, {
         enum Field {
             PasswordKey,
-            SharedBy,
             Password,
         }
 
@@ -63,7 +56,7 @@ impl<'de> Deserialize<'de> for SharedPassword {
                     type Value = Field;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("`password_key` or `shared_by` or `password`")
+                        formatter.write_str("`password_key` or `password`")
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<Field, E>
@@ -72,7 +65,6 @@ impl<'de> Deserialize<'de> for SharedPassword {
                     {
                         match value {
                             "password_key" => Ok(Field::PasswordKey),
-                            "shared_by" => Ok(Field::SharedBy),
                             "password" => Ok(Field::Password),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
                         }
@@ -96,14 +88,12 @@ impl<'de> Deserialize<'de> for SharedPassword {
                 where
                     V: SeqAccess<'de>,
             {
-                let shared_by = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
                 let password = seq.next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
                 let password_key: Vec<u8> = seq.next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
                 let password_key = SecretKey::new(password_key);
-                Ok(SharedPassword { shared_by, password, password_key })
+                Ok(SharedPassword {password, password_key })
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<SharedPassword, V::Error>
@@ -111,7 +101,6 @@ impl<'de> Deserialize<'de> for SharedPassword {
                     V: MapAccess<'de>,
             {
                 let mut password_key = None;
-                let mut shared_by = None;
                 let mut password = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -122,12 +111,6 @@ impl<'de> Deserialize<'de> for SharedPassword {
                             let p: Vec<u8> = map.next_value()?;
                             password_key = Some(SecretKey::new(p));
                         }
-                        Field::SharedBy => {
-                            if shared_by.is_some() {
-                                return Err(de::Error::duplicate_field("shared_by"));
-                            }
-                            shared_by = Some(map.next_value()?);
-                        }
                         Field::Password => {
                             if password.is_some() {
                                 return Err(de::Error::duplicate_field("password"));
@@ -137,9 +120,8 @@ impl<'de> Deserialize<'de> for SharedPassword {
                     }
                 }
                 let password_key = password_key.ok_or_else(|| de::Error::missing_field("password_key"))?;
-                let shared_by = shared_by.ok_or_else(|| de::Error::missing_field("shared_by"))?;
                 let password = password.ok_or_else(|| de::Error::missing_field("password"))?;
-                Ok(SharedPassword { password_key, shared_by, password })
+                Ok(SharedPassword { password_key, password })
             }
         }
         const FIELDS: &'static [&'static str] = &["shared_by", "password_key", "password"];

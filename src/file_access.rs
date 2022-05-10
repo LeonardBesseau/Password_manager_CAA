@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::{fs, io};
-use std::io::{BufReader, BufWriter, ErrorKind, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use uuid::Uuid;
 use crate::shared_file::SharedPassword;
@@ -129,4 +129,8 @@ pub(crate) fn read_shared_file(path: &str, username: &str, key: &ecies_ed25519::
         output.push(b);
     }
     Ok(output)
+}
+
+pub(crate) fn remove_shared_file(path: &str, username: &str) -> Result<(), FileAccessError> {
+    Ok(fs::remove_file(get_user_shared_filepath(path, username))?)
 }
