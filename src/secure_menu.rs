@@ -10,7 +10,7 @@ use crate::file_access::{read_shared_file, read_user_file, user_file_exists, wri
 use crate::input::{ask_for, ask_for_password};
 use crate::password::{SecretKey};
 use crate::shared_file::SharedPassword;
-use crate::user_file::{PasswordEntryLocked, Unlockable, UserFileUnlocked};
+use crate::user_file::{Lockable, PasswordEntryLocked, Unlockable, UserFileUnlocked};
 
 fn add_password(path: &str, user_file: &mut UserFileUnlocked, master_key: &SecretKey) -> Result<(), Box<dyn Error>> {
     let site = match ask_for("Please enter a site") {
@@ -123,7 +123,6 @@ fn show_shared_password(path: &str, user_file: &UserFileUnlocked) -> Result<(), 
     println!("Username: {}", data.username);
     println!("Password: {}", &data.password.expose_secret());
     Ok(())
-
 }
 
 fn generate_password(charset: &str, length: usize) -> SecretString {
@@ -215,6 +214,16 @@ fn verify_password_strength() {
     }
 }
 
+fn change_master_password(path: &str, user_file: UserFileUnlocked) -> Result<(), Box<dyn Error>> {
+    let password = ask_for_password();
+    if password.is_none() {
+        return Ok(());
+    }
+    let (new_user_file, new_master_key) = user_file.change_key(password.unwrap())?;
+    save_user_file(&path, &new_user_file, &new_master_key)?;
+    Ok(())
+}
+
 pub(crate) fn secure_menu(path: &str, mut user_file: UserFileUnlocked, master_key: SecretKey) -> Result<(), Box<dyn Error>> {
     println!("Welcome {} !", user_file.public.username);
     loop {
@@ -231,7 +240,7 @@ pub(crate) fn secure_menu(path: &str, mut user_file: UserFileUnlocked, master_ke
         ).min_max(0, 7).get() {
             0 => {
                 println!("Goodbye {}!", user_file.public.username);
-                break;
+                return Ok(());
             }
             1 => add_password(path, &mut user_file, &master_key)?,
             2 => show_password(&user_file)?,
@@ -239,9 +248,12 @@ pub(crate) fn secure_menu(path: &str, mut user_file: UserFileUnlocked, master_ke
             4 => show_shared_password(path, &user_file)?,
             5 => verify_password_strength(),
             6 => generate_password_menu(),
-            7 => todo!(),
+            7 => {
+                change_master_password(path, user_file)?;
+                println!("Please relogin to continue");
+                return Ok(());
+            }
             _ => panic!("Invalid input")
         }
     }
-    Ok(())
 }
