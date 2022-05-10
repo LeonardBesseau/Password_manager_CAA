@@ -37,13 +37,15 @@ pub fn register(path: &str) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let public_data = PublicData::new(generate_nonce(), salt_buf, compute_hash(username.as_str(), &master_key), &username);
+    let mut csprng = rand_7::thread_rng();
+    let (private_key, public_key) = ecies_ed25519::generate_keypair(&mut csprng);
+    let public_data = PublicData::new(generate_nonce(), salt_buf, compute_hash(username.as_str(), &master_key), &username, public_key);
 
     let password_key = generate_password_key();
-    let private_data = PrivateData::new(password_key, vec![]);
+    let private_data = PrivateData::new(password_key, private_key, vec![]);
 
     // encrypt password key
     let user_file = UserFileUnlocked::new(public_data, private_data);
-    save_user_file(path,  user_file, &master_key)
+    save_user_file(path, &user_file, &master_key)
 }
 

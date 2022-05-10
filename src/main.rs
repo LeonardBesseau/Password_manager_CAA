@@ -1,5 +1,3 @@
-extern crate core;
-
 mod register;
 mod common;
 mod input;
@@ -8,6 +6,7 @@ mod user_file;
 mod password;
 mod login;
 mod secure_menu;
+mod shared_file;
 
 use std::error::Error;
 use read_input::prelude::*;
@@ -34,6 +33,7 @@ const PATH: &str = "files";
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!("Welcome to the very secure password manager !");
+
     loop {
         match input::<i32>().repeat_msg("Please select one of the following to continue\
         \n0 - Exit\

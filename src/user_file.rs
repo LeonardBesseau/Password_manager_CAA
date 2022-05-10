@@ -1,12 +1,16 @@
 use std::error::Error;
+use std::fmt;
 use std::fmt::{Display, Formatter};
 use secrecy::{ExposeSecret, SecretString, Zeroize};
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, Deserializer, de};
 
 use chacha20poly1305::{XChaCha20Poly1305, Key, XNonce};
 use chacha20poly1305::aead::{Aead, NewAead, Payload};
 
 use constant_time_eq::constant_time_eq;
+use ecies_ed25519::{PublicKey};
+use serde::de::{MapAccess, SeqAccess, Visitor};
+use serde::ser::SerializeStruct;
 use crate::password::{compute_hash, EncryptedData, generate_nonce, Nonce, Salt, SecretKey};
 
 
@@ -31,6 +35,7 @@ pub struct PublicData {
     pub salt: Salt,
     pub hash: String,
     pub username: String,
+    pub public_key: PublicKey,
 }
 
 
@@ -50,12 +55,7 @@ pub struct PasswordEntryUnlocked {
 
 pub struct PrivateData {
     password_key: SecretKey,
-    passwords: Vec<PasswordEntryLocked>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PrivateDataSerialize {
-    password_key: [u8; 32],
+    private_key: ecies_ed25519::SecretKey,
     passwords: Vec<PasswordEntryLocked>,
 }
 
@@ -65,6 +65,7 @@ pub struct UserFileLocked {
     private: EncryptedData,
 }
 
+#[derive(Clone)]
 pub struct UserFileUnlocked {
     pub public: PublicData,
     private: PrivateData,
@@ -94,34 +95,142 @@ impl From<bincode::Error> for UserFileError {
     }
 }
 
-impl PrivateDataSerialize {
-    fn convert(self) -> PrivateData {
-        let output = PrivateData {
-            password_key: SecretKey::new(Vec::from(self.password_key)),
-            passwords: self.passwords,
-        };
-        output
+
+impl Clone for PrivateData {
+    fn clone(&self) -> Self {
+        let mut bits: [u8; 32] = [0u8; 32];
+        bits.copy_from_slice(self.private_key.as_bytes());
+        PrivateData {
+            password_key: SecretKey::new(self.password_key.expose_secret().clone()),
+            private_key: ecies_ed25519::SecretKey::from_bytes(bits.as_slice()).unwrap(),
+            passwords: self.passwords.clone(),
+        }
     }
 }
 
-impl Zeroize for PrivateDataSerialize {
-    fn zeroize(&mut self) {
-        self.password_key.zeroize();
-        self.passwords.zeroize();
+impl Serialize for PrivateData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer {
+        let mut state = serializer.serialize_struct("PrivateData", 3)?;
+        state.serialize_field("password_key", &self.password_key.expose_secret())?;
+        state.serialize_field("private_key", &self.private_key)?;
+        state.serialize_field("passwords", &self.passwords)?;
+        state.end()
+    }
+}
+
+
+
+impl<'de> Deserialize<'de> for PrivateData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>, {
+        enum Field {
+            PasswordKey,
+            PrivateKey,
+            Passwords,
+        }
+
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+                where
+                    D: Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl<'de> Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("`password_key` or `private_key` or `passwords`")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                        where
+                            E: de::Error,
+                    {
+                        match value {
+                            "password_key" => Ok(Field::PasswordKey),
+                            "private_key" => Ok(Field::PrivateKey),
+                            "passwords" => Ok(Field::Passwords),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct PrivateDataVisitor;
+
+        impl<'de> Visitor<'de> for PrivateDataVisitor {
+            type Value = PrivateData;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct PrivateData")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<PrivateData, V::Error>
+                where
+                    V: SeqAccess<'de>,
+            {
+                let password_key: Vec<u8> = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let password_key = SecretKey::new(password_key);
+                let private_key = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let passwords = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                Ok(PrivateData { password_key, private_key, passwords })
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<PrivateData, V::Error>
+                where
+                    V: MapAccess<'de>,
+            {
+                let mut password_key = None;
+                let mut private_key = None;
+                let mut passwords = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::PasswordKey => {
+                            if password_key.is_some() {
+                                return Err(de::Error::duplicate_field("password_key"));
+                            }
+                            let p: Vec<u8> = map.next_value()?;
+                            password_key = Some(SecretKey::new(p));
+                        }
+                        Field::PrivateKey => {
+                            if private_key.is_some() {
+                                return Err(de::Error::duplicate_field("private_key"));
+                            }
+                            private_key = Some(map.next_value()?);
+                        }
+                        Field::Passwords => {
+                            if passwords.is_some() {
+                                return Err(de::Error::duplicate_field("passwords"));
+                            }
+                            passwords = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let password_key = password_key.ok_or_else(|| de::Error::missing_field("password_key"))?;
+                let private_key = private_key.ok_or_else(|| de::Error::missing_field("private_key"))?;
+                let passwords = passwords.ok_or_else(|| de::Error::missing_field("passwords"))?;
+                Ok(PrivateData { password_key, private_key, passwords })
+            }
+        }
+        const FIELDS: &'static [&'static str] = &["password_key", "private_key", "passwords"];
+        deserializer.deserialize_struct("PrivateData", FIELDS, PrivateDataVisitor)
     }
 }
 
 
 impl PrivateData {
-    fn convert(&self) -> PrivateDataSerialize {
-        PrivateDataSerialize {
-            password_key: <[u8; 32]>::try_from(self.password_key.expose_secret().as_slice()).unwrap(),
-            passwords: self.passwords.clone(),
-        }
-    }
-
-    pub fn new(password_key: SecretKey, passwords: Vec<PasswordEntryLocked>) -> Self {
-        PrivateData { password_key, passwords }
+    pub fn new(password_key: SecretKey, private_key: ecies_ed25519::SecretKey, passwords: Vec<PasswordEntryLocked>) -> Self {
+        PrivateData { password_key, private_key, passwords }
     }
 }
 
@@ -188,9 +297,9 @@ impl Unlockable<UserFileUnlocked> for UserFileLocked {
 
         let plaintext = aead.decrypt(nonce, Payload { msg: self.private.as_slice(), aad: public_data.as_slice() })?;
 
-        let passwords: PrivateDataSerialize = bincode::deserialize(&plaintext)?;
+        let passwords: PrivateData = bincode::deserialize(&plaintext)?;
 
-        Ok(UserFileUnlocked { public: self.public.clone(), private: passwords.convert() })
+        Ok(UserFileUnlocked { public: self.public.clone(), private: passwords })
     }
 }
 
@@ -198,20 +307,6 @@ impl Unlockable<UserFileUnlocked> for UserFileLocked {
 impl UserFileLocked {
     pub fn verify(&self, master_key: &SecretKey) -> bool {
         constant_time_eq(compute_hash(self.public.username.as_str(), master_key).as_bytes(), self.public.hash.as_bytes())
-    }
-
-    pub fn unlock(self, master_key: &SecretKey) -> Result<UserFileUnlocked, UserFileError> {
-        let key = Key::from_slice(master_key.expose_secret().as_slice());
-        let nonce = XNonce::from_slice(self.public.nonce.as_slice());
-        let aead = XChaCha20Poly1305::new(&key);
-
-        let public_data = bincode::serialize(&self.public)?;
-
-        let plaintext = aead.decrypt(nonce, Payload { msg: self.private.as_slice(), aad: public_data.as_slice() })?;
-
-        let passwords: PrivateDataSerialize = bincode::deserialize(&plaintext)?;
-
-        Ok(UserFileUnlocked { public: self.public, private: passwords.convert() })
     }
 }
 
@@ -222,7 +317,7 @@ impl Lockable<UserFileLocked> for UserFileUnlocked {
         let nonce = XNonce::from_slice(self.public.nonce.as_slice());
         let aead = XChaCha20Poly1305::new(&key);
 
-        let private_data = bincode::serialize(&(self.private.convert()))?;
+        let private_data = bincode::serialize(&self.private)?;
         let public_data = bincode::serialize(&self.public)?;
 
         let ciphertext = aead.encrypt(nonce, Payload { msg: private_data.as_slice(), aad: public_data.as_slice() })?;
@@ -249,15 +344,20 @@ impl UserFileUnlocked {
     pub fn get_password(&self, index: usize) -> Result<PasswordEntryUnlocked, UserFileError> {
         self.private.passwords.get(index).unwrap().clone().unlock(&self.private.password_key)
     }
+
+    pub fn get_private_key(&self) -> &ecies_ed25519::SecretKey{
+        &self.private.private_key
+    }
 }
 
 impl PublicData {
-    pub fn new(nonce: [u8; 24], salt: [u8; 16], hash: String, username: &String) -> Self {
+    pub fn new(nonce: [u8; 24], salt: [u8; 16], hash: String, username: &String, public_key: PublicKey) -> Self {
         PublicData {
             nonce,
             salt,
             hash,
             username: username.clone(),
+            public_key,
         }
     }
 }

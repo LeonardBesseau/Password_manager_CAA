@@ -4,7 +4,7 @@ use crate::file_access::{read_user_file, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
 use crate::login::LoginResult::{EarlyAbort, Invalid, Success};
 use crate::password::{get_master_key, SecretKey};
-use crate::user_file::UserFileUnlocked;
+use crate::user_file::{Unlockable, UserFileUnlocked};
 
 pub enum LoginResult {
     EarlyAbort,
