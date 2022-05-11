@@ -1,9 +1,10 @@
-use secrecy::{ExposeSecret, SecretString, SecretVec, Zeroize};
-use argon2::{password_hash::{
-    PasswordHasher, SaltString,
-}, Argon2, ParamsBuilder, Algorithm, Version};
+use argon2::{
+    password_hash::{PasswordHasher, SaltString},
+    Algorithm, Argon2, ParamsBuilder, Version,
+};
 use hkdf::Hkdf;
 use rand_core::{OsRng, RngCore};
+use secrecy::{ExposeSecret, SecretString, SecretVec, Zeroize};
 use sha2::Sha512;
 
 pub type EncryptedData = Vec<u8>;
@@ -20,7 +21,11 @@ pub fn get_master_key(master_password: SecretString, salt: SaltString) -> Secret
     let p = param_builder.params().unwrap();
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::default(), p);
     // TODO remove unwrap and replace by error management
-    let master_key = argon2.hash_password(master_password.expose_secret().as_bytes(), &salt).unwrap().hash.unwrap();
+    let master_key = argon2
+        .hash_password(master_password.expose_secret().as_bytes(), &salt)
+        .unwrap()
+        .hash
+        .unwrap();
     SecretVec::new(Vec::from(master_key.as_bytes()))
 }
 

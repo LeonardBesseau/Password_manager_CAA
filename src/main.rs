@@ -1,16 +1,16 @@
-mod register;
 mod common;
 mod input;
 mod file_access;
 mod user_file;
 mod password;
-mod login;
-mod secure_menu;
 mod shared_file;
+mod cli;
+
 
 use std::error::Error;
 use read_input::prelude::*;
-use crate::login::{login, LoginResult};
+use cli::register;
+use cli::login::{login, LoginResult};
 
 
 fn secure_mode(path: &str) -> Result<(), Box<dyn Error>> {
@@ -25,8 +25,7 @@ fn secure_mode(path: &str) -> Result<(), Box<dyn Error>> {
         }
         (LoginResult::Success, Some(t)) => t
     };
-
-    secure_menu::secure_menu(path, user_file, master_key)
+    cli::secure_menu::menu(path, user_file, master_key)
 }
 
 const PATH: &str = "files";
