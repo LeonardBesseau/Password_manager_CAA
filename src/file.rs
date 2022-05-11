@@ -1,12 +1,13 @@
 use crate::error::PasswordManagerError;
 use crate::shared_file::SharedPassword;
-use crate::user_file::UserDataLocked;
+use crate::user_file::{Lockable, UserDataLocked, UserDataUnlocked};
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs, io};
 use uuid::Uuid;
+use crate::crypto::SecretKey;
 
 pub const DATA_FILE_NAME: &str = "data";
 pub const SHARED_FILE_NAME: &str = "shared";
@@ -118,4 +119,14 @@ pub(crate) fn remove_shared_file(path: &str, username: &str) -> Result<(), Passw
         };
     }
     Ok(())
+}
+
+pub(crate) fn save_user_file(
+    path: &str,
+    user_file: &UserDataUnlocked,
+    master_key: &SecretKey,
+) -> Result<(), Box<dyn Error>> {
+    let user_file = user_file.lock(&master_key)?;
+    let username = user_file.public.username.clone();
+    write_user_file(path, username.as_str(), user_file)
 }

@@ -4,8 +4,9 @@ use crate::input::ask_for;
 use crate::shared_file::SharedPassword;
 use crate::user_file::UserDataUnlocked;
 use std::error::Error;
+use crate::error::PasswordManagerError;
 
-pub fn share_password(path: &str, user_file: &UserDataUnlocked) -> Result<(), Box<dyn Error>> {
+pub fn share_password(path: &str, user_file: &UserDataUnlocked) -> Result<(), PasswordManagerError> {
     let selected_entry = match select_password_entry(&user_file) {
         None => {
             return Ok(());
@@ -14,7 +15,7 @@ pub fn share_password(path: &str, user_file: &UserDataUnlocked) -> Result<(), Bo
     };
     let mut data = user_file.get_password(selected_entry)?;
     data.shared_by = Some(user_file.public.username.clone());
-    let shared = SharedPassword::new(data)?;
+    let shared = SharedPassword::new(data, &user_file.public.username)?;
     let shared = bincode::serialize(&shared)?;
     let mut username;
     loop {
@@ -31,6 +32,10 @@ pub fn share_password(path: &str, user_file: &UserDataUnlocked) -> Result<(), Bo
         }
     }
     let target_user_file = read_user_file(path, &username)?;
+    if !target_user_file.verify_public_key() {
+        eprint!("Error public key for user {} was tampered with ! Aborting", target_user_file.public.username);
+        return Err(PasswordManagerError::Security);
+    }
     let mut csprng = rand_7::thread_rng();
     let output = ecies_ed25519::encrypt(
         &target_user_file.public.public_key,

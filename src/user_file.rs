@@ -1,6 +1,7 @@
 use secrecy::{ExposeSecret, SecretString, Zeroize};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
+use std::str::FromStr;
 
 use chacha20poly1305::aead::{Aead, NewAead, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
@@ -12,8 +13,10 @@ use crate::crypto::{
 use crate::error::PasswordManagerError;
 use constant_time_eq::constant_time_eq;
 use ecies_ed25519::PublicKey;
+use ed25519_dalek::Signature;
 use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
+use crate::ca::{sign_public_key, verify_public_key};
 
 pub trait Lockable<T: Unlockable<Self>>: Sized {
     fn lock(&self, key: &SecretKey) -> Result<T, PasswordManagerError>;
@@ -31,6 +34,7 @@ pub struct PublicData {
     pub hash: String,
     pub username: String,
     pub public_key: PublicKey,
+    pub signature: Signature,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -142,8 +146,8 @@ impl Clone for PrivateData {
 
 impl Serialize for PrivateData {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
+        where
+            S: Serializer,
     {
         let mut state = serializer.serialize_struct("PrivateData", 3)?;
         state.serialize_field("password_key", &self.password_key.expose_secret())?;
@@ -155,8 +159,8 @@ impl Serialize for PrivateData {
 
 impl<'de> Deserialize<'de> for PrivateData {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
         enum Field {
             PasswordKey,
@@ -166,8 +170,8 @@ impl<'de> Deserialize<'de> for PrivateData {
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
-            where
-                D: Deserializer<'de>,
+                where
+                    D: Deserializer<'de>,
             {
                 struct FieldVisitor;
 
@@ -179,8 +183,8 @@ impl<'de> Deserialize<'de> for PrivateData {
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<Field, E>
-                    where
-                        E: de::Error,
+                        where
+                            E: de::Error,
                     {
                         match value {
                             "password_key" => Ok(Field::PasswordKey),
@@ -205,8 +209,8 @@ impl<'de> Deserialize<'de> for PrivateData {
             }
 
             fn visit_seq<V>(self, mut seq: V) -> Result<PrivateData, V::Error>
-            where
-                V: SeqAccess<'de>,
+                where
+                    V: SeqAccess<'de>,
             {
                 let password_key: Vec<u8> = seq
                     .next_element()?
@@ -226,8 +230,8 @@ impl<'de> Deserialize<'de> for PrivateData {
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<PrivateData, V::Error>
-            where
-                V: MapAccess<'de>,
+                where
+                    V: MapAccess<'de>,
             {
                 let mut password_key = None;
                 let mut private_key = None;
@@ -389,16 +393,21 @@ impl UserDataLocked {
                 hash: "".to_string(),
                 username: "".to_string(),
                 public_key: Default::default(),
+                signature: Signature::from_str("AFDF902050EB00E80DC6C0B2C0F6F548055F9AF7AD7FFAF0C00CE2F3B7D342344248B80DF8C49D5B8EC84448D0EC0E749834037D9DDC3BABCA4D6EECE2F62301").unwrap(),
             },
             private: vec![],
         }
     }
 
-    pub fn verify(&self, master_key: &SecretKey) -> bool {
+    pub fn verify_master_key(&self, master_key: &SecretKey) -> bool {
         constant_time_eq(
             compute_hash(self.public.username.as_str(), master_key).as_bytes(),
             self.public.hash.as_bytes(),
         )
+    }
+
+    pub fn verify_public_key(&self) -> bool {
+        verify_public_key(self.public.username.as_str(), &self.public.public_key, &self.public.signature)
     }
 }
 
@@ -495,6 +504,7 @@ impl PublicData {
             hash,
             username: username.clone(),
             public_key,
+            signature: sign_public_key(username.as_str(), &public_key),
         }
     }
 }

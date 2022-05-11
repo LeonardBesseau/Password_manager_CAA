@@ -1,4 +1,4 @@
-use crate::common::save_user_file;
+use crate::file::save_user_file;
 use crate::input::ask_for_password;
 use crate::user_file::UserDataUnlocked;
 use std::error::Error;

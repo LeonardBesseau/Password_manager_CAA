@@ -19,8 +19,11 @@ fn login_setup(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), Passw
         user_file.get_private_key(),
     )?;
     for entry in entries {
-        // TODO manage invalid param
         let password = entry.get_password()?;
+        if !entry.verify(password.shared_by.clone().unwrap().as_str()) {
+            eprint!("Invalid signature for password supposedly shared by {}. Skipping", password.shared_by.unwrap());
+            continue;
+        }
         user_file.add_password(
             password.site.as_str(),
             password.username.as_str(),
@@ -58,7 +61,7 @@ pub fn login(
     let salt = SaltString::b64_encode(&user_file.public.salt)?;
     let master_key = generate_master_key(password.unwrap(), &salt)?;
 
-    if !user_file.verify(&master_key) {
+    if !user_file.verify_master_key(&master_key) {
         return Ok((Invalid, None));
     }
 

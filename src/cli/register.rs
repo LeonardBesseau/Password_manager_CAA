@@ -1,4 +1,4 @@
-use crate::common::save_user_file;
+use crate::file::save_user_file;
 use crate::crypto::{
     compute_hash, generate_asymmetric_key, generate_master_key, generate_password_key,
     generate_salt,

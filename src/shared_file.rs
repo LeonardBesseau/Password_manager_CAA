@@ -6,20 +6,28 @@ use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
+use ed25519_dalek::Signature;
+use crate::ca::{sign_message, verify_message};
 
 pub struct SharedPassword {
     password: PasswordEntryLocked,
     password_key: SecretKey,
+    signature: Signature
 }
 
 impl SharedPassword {
-    pub fn new(password: PasswordEntryUnlocked) -> Result<Self, PasswordManagerError> {
+    pub fn new(password: PasswordEntryUnlocked, username: &str) -> Result<Self, PasswordManagerError> {
         let password_key = generate_password_key();
         let password = password.lock(&password_key)?;
         Ok(SharedPassword {
             password,
             password_key,
+            signature: sign_message(username)
         })
+    }
+
+    pub fn verify(&self, username: &str) -> bool{
+        verify_message(username, &self.signature)
     }
 
     pub fn get_password(&self) -> Result<PasswordEntryUnlocked, PasswordManagerError> {
@@ -35,6 +43,7 @@ impl Serialize for SharedPassword {
         let mut state = serializer.serialize_struct("SharedPassword", 3)?;
         state.serialize_field("password", &self.password)?;
         state.serialize_field("password_key", &self.password_key.expose_secret())?;
+        state.serialize_field("signature", &self.signature)?;
         state.end()
     }
 }
@@ -47,6 +56,7 @@ impl<'de> Deserialize<'de> for SharedPassword {
         enum Field {
             PasswordKey,
             Password,
+            Signature,
         }
 
         impl<'de> Deserialize<'de> for Field {
@@ -60,7 +70,7 @@ impl<'de> Deserialize<'de> for SharedPassword {
                     type Value = Field;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("`password_key` or `password`")
+                        formatter.write_str("`password_key` or `password` or `signature`")
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<Field, E>
@@ -70,6 +80,7 @@ impl<'de> Deserialize<'de> for SharedPassword {
                         match value {
                             "password_key" => Ok(Field::PasswordKey),
                             "password" => Ok(Field::Password),
+                            "signature" => Ok(Field::Signature),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -99,9 +110,13 @@ impl<'de> Deserialize<'de> for SharedPassword {
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
                 let password_key = SecretKey::new(password_key);
+                let signature = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
                 Ok(SharedPassword {
                     password,
                     password_key,
+                    signature
                 })
             }
 
@@ -111,6 +126,7 @@ impl<'de> Deserialize<'de> for SharedPassword {
             {
                 let mut password_key = None;
                 let mut password = None;
+                let mut signature = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::PasswordKey => {
@@ -126,18 +142,27 @@ impl<'de> Deserialize<'de> for SharedPassword {
                             }
                             password = Some(map.next_value()?);
                         }
+                        Field::Signature => {
+                            if signature.is_some() {
+                                return Err(de::Error::duplicate_field("signature"));
+                            }
+                            signature = Some(map.next_value()?);
+                        }
                     }
                 }
                 let password_key =
                     password_key.ok_or_else(|| de::Error::missing_field("password_key"))?;
                 let password = password.ok_or_else(|| de::Error::missing_field("password"))?;
+                let signature =
+                    signature.ok_or_else(|| de::Error::missing_field("signature"))?;
                 Ok(SharedPassword {
                     password_key,
                     password,
+                    signature
                 })
             }
         }
-        const FIELDS: &'static [&'static str] = &["shared_by", "password_key", "password"];
+        const FIELDS: &'static [&'static str] = &["password_key", "password", "signature"];
         deserializer.deserialize_struct("SharedPassword", FIELDS, PrivateDataVisitor)
     }
 }
