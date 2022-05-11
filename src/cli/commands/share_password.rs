@@ -1,5 +1,5 @@
 use crate::cli::commands::utils::select_password_entry;
-use crate::file_access::{read_user_file, user_file_exists, write_shared_file};
+use crate::file::{read_user_file, user_file_exists, write_shared_file};
 use crate::input::ask_for;
 use crate::shared_file::SharedPassword;
 use crate::user_file::UserDataUnlocked;

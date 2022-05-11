@@ -100,24 +100,31 @@ impl Password {
         Password { size, payload }
     }
 
-    fn encrypt(password: &SecretString, aead: XChaCha20Poly1305, nonce: Nonce) -> Result<Vec<u8>, PasswordManagerError> {
+    fn encrypt(
+        password: &SecretString,
+        aead: XChaCha20Poly1305,
+        nonce: Nonce,
+    ) -> Result<Vec<u8>, PasswordManagerError> {
         if password.expose_secret().len() > Password::MAX_LEN {
             return Err(PasswordManagerError::InvalidParameter);
         }
         let mut password = bincode::serialize(&Password::new(password.clone()))?;
-        let ciphertext = aead.encrypt(
-            XNonce::from_slice(nonce.as_slice()),
-            password.as_slice(),
-        )?;
+        let ciphertext = aead.encrypt(XNonce::from_slice(nonce.as_slice()), password.as_slice())?;
         password.zeroize();
         Ok(ciphertext)
     }
 
-    fn decrypt(password: &Vec<u8>, aead: XChaCha20Poly1305, nonce: Nonce) -> Result<SecretString, PasswordManagerError> {
+    fn decrypt(
+        password: &Vec<u8>,
+        aead: XChaCha20Poly1305,
+        nonce: Nonce,
+    ) -> Result<SecretString, PasswordManagerError> {
         let plaintext = aead.decrypt(XNonce::from_slice(nonce.as_slice()), password.as_slice())?;
         let mut password: Password = bincode::deserialize(&plaintext)?;
         password.payload.resize((&password).size, 0);
-        Ok(SecretString::from(String::from_utf8(password.payload.clone()).unwrap()))
+        Ok(SecretString::from(
+            String::from_utf8(password.payload.clone()).unwrap(),
+        ))
     }
 }
 
@@ -135,8 +142,8 @@ impl Clone for PrivateData {
 
 impl Serialize for PrivateData {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         let mut state = serializer.serialize_struct("PrivateData", 3)?;
         state.serialize_field("password_key", &self.password_key.expose_secret())?;
@@ -148,8 +155,8 @@ impl Serialize for PrivateData {
 
 impl<'de> Deserialize<'de> for PrivateData {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         enum Field {
             PasswordKey,
@@ -159,8 +166,8 @@ impl<'de> Deserialize<'de> for PrivateData {
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
-                where
-                    D: Deserializer<'de>,
+            where
+                D: Deserializer<'de>,
             {
                 struct FieldVisitor;
 
@@ -172,8 +179,8 @@ impl<'de> Deserialize<'de> for PrivateData {
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<Field, E>
-                        where
-                            E: de::Error,
+                    where
+                        E: de::Error,
                     {
                         match value {
                             "password_key" => Ok(Field::PasswordKey),
@@ -198,8 +205,8 @@ impl<'de> Deserialize<'de> for PrivateData {
             }
 
             fn visit_seq<V>(self, mut seq: V) -> Result<PrivateData, V::Error>
-                where
-                    V: SeqAccess<'de>,
+            where
+                V: SeqAccess<'de>,
             {
                 let password_key: Vec<u8> = seq
                     .next_element()?
@@ -219,8 +226,8 @@ impl<'de> Deserialize<'de> for PrivateData {
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<PrivateData, V::Error>
-                where
-                    V: MapAccess<'de>,
+            where
+                V: MapAccess<'de>,
             {
                 let mut password_key = None;
                 let mut private_key = None;
@@ -319,7 +326,6 @@ impl Lockable<PasswordEntryLocked> for PasswordEntryUnlocked {
 
         let ciphertext = Password::encrypt(&self.password, aead, nonce)?;
 
-
         Ok(PasswordEntryLocked {
             site: self.site.clone(),
             nonce,
@@ -375,14 +381,17 @@ impl Unlockable<UserDataUnlocked> for UserDataLocked {
 }
 
 impl UserDataLocked {
-    pub fn fake() -> Self{
-        UserDataLocked{ public: PublicData {
-            nonce: [0;24],
-            salt: [0;16],
-            hash: "".to_string(),
-            username: "".to_string(),
-            public_key: Default::default()
-        }, private: vec![] }
+    pub fn fake() -> Self {
+        UserDataLocked {
+            public: PublicData {
+                nonce: [0; 24],
+                salt: [0; 16],
+                hash: "".to_string(),
+                username: "".to_string(),
+                public_key: Default::default(),
+            },
+            private: vec![],
+        }
     }
 
     pub fn verify(&self, master_key: &SecretKey) -> bool {

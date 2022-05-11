@@ -24,7 +24,7 @@ impl Display for PasswordManagerError {
                 f,
                 "Security error. The data was either corrupted or modified."
             ),
-            PasswordManagerError::InvalidParameter => write!(f, "Invalid parameter encountered",)
+            PasswordManagerError::InvalidParameter => write!(f, "Invalid parameter encountered",),
         }
     }
 }

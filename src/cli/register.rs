@@ -3,7 +3,7 @@ use crate::crypto::{
     compute_hash, generate_asymmetric_key, generate_master_key, generate_password_key,
     generate_salt,
 };
-use crate::file_access::{create_user_directory, user_file_exists};
+use crate::file::{create_user_directory, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
 use crate::user_file::{PrivateData, PublicData, UserDataUnlocked};
 use std::error::Error;

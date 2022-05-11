@@ -1,7 +1,7 @@
 use crate::cli::login::LoginResult::{EarlyAbort, Invalid, Success};
 use crate::crypto::{generate_master_key, SecretKey};
 use crate::error::PasswordManagerError;
-use crate::file_access::{read_shared_file, read_user_file, remove_shared_file, user_file_exists};
+use crate::file::{read_shared_file, read_user_file, remove_shared_file, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
 use crate::user_file::{Unlockable, UserDataLocked, UserDataUnlocked};
 use argon2::password_hash::SaltString;

@@ -1,5 +1,5 @@
 use crate::crypto::SecretKey;
-use crate::file_access::write_user_file;
+use crate::file::write_user_file;
 use crate::user_file::{Lockable, UserDataUnlocked};
 use std::error::Error;
 
