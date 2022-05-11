@@ -3,7 +3,7 @@ use crate::crypto::{generate_master_key, SecretKey};
 use crate::error::PasswordManagerError;
 use crate::file_access::{read_shared_file, read_user_file, remove_shared_file, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
-use crate::user_file::{Unlockable, UserDataUnlocked};
+use crate::user_file::{Unlockable, UserDataLocked, UserDataUnlocked};
 use argon2::password_hash::SaltString;
 
 pub enum LoginResult {
@@ -35,29 +35,26 @@ fn login_setup(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), Passw
 pub fn login(
     path: &str,
 ) -> Result<(LoginResult, Option<(UserDataUnlocked, SecretKey)>), PasswordManagerError> {
-    let mut username;
-    loop {
-        let user_input = ask_for_username();
-        if user_input.is_none() {
-            return Ok((EarlyAbort, None));
-        }
-
-        username = user_input.unwrap();
-        // TODO find a way to manage invalid user.
-        if !user_file_exists(path, username.as_str()) {
-            println!("This username is not registered. Please register first")
-        } else {
-            break;
-        }
+    let username;
+    let user_input = ask_for_username();
+    if user_input.is_none() {
+        return Ok((EarlyAbort, None));
     }
-    let user_file = read_user_file(path, username.as_str())?;
+
+    username = user_input.unwrap();
+
+    // TODO this is vulnerable to a timing attack (disk access and comparison is constant only if both operand are the same size)
+    let user_file = if !user_file_exists(path, username.as_str()) {
+        UserDataLocked::fake()
+    } else {
+        read_user_file(path, username.as_str())?
+    };
 
     let password = ask_for_password();
     if password.is_none() {
         return Ok((EarlyAbort, None));
     }
 
-    // TODO manage salt error (Replace unwrapt by ? with custom error conversion)
     let salt = SaltString::b64_encode(&user_file.public.salt)?;
     let master_key = generate_master_key(password.unwrap(), &salt)?;
 

@@ -375,6 +375,16 @@ impl Unlockable<UserDataUnlocked> for UserDataLocked {
 }
 
 impl UserDataLocked {
+    pub fn fake() -> Self{
+        UserDataLocked{ public: PublicData {
+            nonce: [0;24],
+            salt: [0;16],
+            hash: "".to_string(),
+            username: "".to_string(),
+            public_key: Default::default()
+        }, private: vec![] }
+    }
+
     pub fn verify(&self, master_key: &SecretKey) -> bool {
         constant_time_eq(
             compute_hash(self.public.username.as_str(), master_key).as_bytes(),

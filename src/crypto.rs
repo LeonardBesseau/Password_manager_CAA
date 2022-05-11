@@ -47,7 +47,7 @@ pub fn generate_asymmetric_key() -> (ecies_ed25519::SecretKey, PublicKey) {
 
 pub fn compute_hash(username: &str, master_key: &SecretVec<u8>) -> String {
     let hk = Hkdf::<Sha512>::new(None, master_key.expose_secret());
-    let mut output = [0u8; 42];
+    let mut output = [0u8; 32];
     let info = String::from(username);
     hk.expand(info.as_ref(), &mut output).unwrap();
     hex::encode(output)

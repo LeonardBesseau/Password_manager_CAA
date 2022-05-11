@@ -30,7 +30,6 @@ pub fn add_password(
     };
 
     user_file.add_password(site.as_str(), username.as_str(), password, None)?;
-    // TODO manage error
     save_user_file(&path, user_file, &master_key)?;
     println!("Password added successfully");
     Ok(())
