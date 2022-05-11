@@ -1,8 +1,8 @@
-use crate::user_file::UserFileUnlocked;
+use crate::user_file::UserDataUnlocked;
 use read_input::prelude::input;
 use read_input::{InputBuild, InputConstraints};
 
-pub fn select_password_entry(user_file: &UserFileUnlocked) -> Option<usize> {
+pub fn select_password_entry(user_file: &UserDataUnlocked) -> Option<usize> {
     let entries = user_file.get_password_list();
     for (i, entry) in entries.iter().enumerate() {
         print!("{} - {}", i + 1, &entry.site);

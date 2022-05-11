@@ -1,9 +1,9 @@
 use crate::cli::commands::utils::select_password_entry;
-use crate::user_file::UserFileUnlocked;
+use crate::user_file::UserDataUnlocked;
 use secrecy::ExposeSecret;
 use std::error::Error;
 
-pub fn show_password(user_file: &UserFileUnlocked) -> Result<(), Box<dyn Error>> {
+pub fn show_password(user_file: &UserDataUnlocked) -> Result<(), Box<dyn Error>> {
     let selected_entry = match select_password_entry(&user_file) {
         None => {
             return Ok(());

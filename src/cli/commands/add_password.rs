@@ -1,12 +1,12 @@
 use crate::common::save_user_file;
 use crate::crypto::SecretKey;
 use crate::input::{ask_for, ask_for_password};
-use crate::user_file::UserFileUnlocked;
+use crate::user_file::UserDataUnlocked;
 use std::error::Error;
 
 pub fn add_password(
     path: &str,
-    user_file: &mut UserFileUnlocked,
+    user_file: &mut UserDataUnlocked,
     master_key: &SecretKey,
 ) -> Result<(), Box<dyn Error>> {
     let site = match ask_for("Please enter a site") {

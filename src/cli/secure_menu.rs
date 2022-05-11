@@ -5,14 +5,14 @@ use crate::cli::commands::share_password::share_password;
 use crate::cli::commands::show_password::show_password;
 use crate::cli::commands::verify_password::verify_password_strength;
 use crate::crypto::SecretKey;
-use crate::user_file::UserFileUnlocked;
+use crate::user_file::UserDataUnlocked;
 use read_input::prelude::input;
 use read_input::{InputBuild, InputConstraints};
 use std::error::Error;
 
 pub(crate) fn menu(
     path: &str,
-    mut user_file: UserFileUnlocked,
+    mut user_file: UserDataUnlocked,
     master_key: SecretKey,
 ) -> Result<(), Box<dyn Error>> {
     println!("Welcome {} !", user_file.public.username);

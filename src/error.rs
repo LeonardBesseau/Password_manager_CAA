@@ -8,6 +8,7 @@ pub enum PasswordManagerError {
     Io(io::Error),
     Serialisation(bincode::Error),
     Security,
+    InvalidParameter,
 }
 
 impl Error for PasswordManagerError {}
@@ -23,6 +24,7 @@ impl Display for PasswordManagerError {
                 f,
                 "Security error. The data was either corrupted or modified."
             ),
+            PasswordManagerError::InvalidParameter => write!(f, "Invalid parameter encountered",)
         }
     }
 }

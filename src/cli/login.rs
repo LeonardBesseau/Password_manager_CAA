@@ -3,7 +3,7 @@ use crate::crypto::{generate_master_key, SecretKey};
 use crate::error::PasswordManagerError;
 use crate::file_access::{read_shared_file, read_user_file, remove_shared_file, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
-use crate::user_file::{Unlockable, UserFileUnlocked};
+use crate::user_file::{Unlockable, UserDataUnlocked};
 use argon2::password_hash::SaltString;
 
 pub enum LoginResult {
@@ -12,7 +12,7 @@ pub enum LoginResult {
     Success,
 }
 
-fn login_setup(path: &str, user_file: &mut UserFileUnlocked) -> Result<(), PasswordManagerError> {
+fn login_setup(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), PasswordManagerError> {
     let entries = read_shared_file(
         path,
         &user_file.public.username,
@@ -34,7 +34,7 @@ fn login_setup(path: &str, user_file: &mut UserFileUnlocked) -> Result<(), Passw
 
 pub fn login(
     path: &str,
-) -> Result<(LoginResult, Option<(UserFileUnlocked, SecretKey)>), PasswordManagerError> {
+) -> Result<(LoginResult, Option<(UserDataUnlocked, SecretKey)>), PasswordManagerError> {
     let mut username;
     loop {
         let user_input = ask_for_username();

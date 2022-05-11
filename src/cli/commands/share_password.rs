@@ -2,10 +2,10 @@ use crate::cli::commands::utils::select_password_entry;
 use crate::file_access::{read_user_file, user_file_exists, write_shared_file};
 use crate::input::ask_for;
 use crate::shared_file::SharedPassword;
-use crate::user_file::UserFileUnlocked;
+use crate::user_file::UserDataUnlocked;
 use std::error::Error;
 
-pub fn share_password(path: &str, user_file: &UserFileUnlocked) -> Result<(), Box<dyn Error>> {
+pub fn share_password(path: &str, user_file: &UserDataUnlocked) -> Result<(), Box<dyn Error>> {
     let selected_entry = match select_password_entry(&user_file) {
         None => {
             return Ok(());

@@ -1,11 +1,11 @@
 use crate::common::save_user_file;
 use crate::input::ask_for_password;
-use crate::user_file::UserFileUnlocked;
+use crate::user_file::UserDataUnlocked;
 use std::error::Error;
 
 pub fn change_master_password(
     path: &str,
-    user_file: UserFileUnlocked,
+    user_file: UserDataUnlocked,
 ) -> Result<(), Box<dyn Error>> {
     let password = ask_for_password();
     if password.is_none() {

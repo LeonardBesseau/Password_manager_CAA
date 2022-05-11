@@ -1,6 +1,6 @@
 use crate::error::PasswordManagerError;
 use crate::shared_file::SharedPassword;
-use crate::user_file::UserFileLocked;
+use crate::user_file::UserDataLocked;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
@@ -38,7 +38,7 @@ pub(crate) fn user_file_exists(path: &str, username: &str) -> bool {
 pub(crate) fn write_user_file(
     path: &str,
     username: &str,
-    data: UserFileLocked,
+    data: UserDataLocked,
 ) -> Result<(), Box<dyn Error>> {
     let mut writer = BufWriter::new(File::create(get_user_filepath(path, username))?);
     bincode::serialize_into(&mut writer, &data)?;
@@ -49,9 +49,9 @@ pub(crate) fn write_user_file(
 pub(crate) fn read_user_file(
     path: &str,
     username: &str,
-) -> Result<UserFileLocked, PasswordManagerError> {
+) -> Result<UserDataLocked, PasswordManagerError> {
     let reader = BufReader::new(File::open(get_user_filepath(path, username))?);
-    let data: UserFileLocked = bincode::deserialize_from(reader)?;
+    let data: UserDataLocked = bincode::deserialize_from(reader)?;
     Ok(data)
 }
 

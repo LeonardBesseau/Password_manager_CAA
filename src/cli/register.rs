@@ -5,7 +5,7 @@ use crate::crypto::{
 };
 use crate::file_access::{create_user_directory, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
-use crate::user_file::{PrivateData, PublicData, UserFileUnlocked};
+use crate::user_file::{PrivateData, PublicData, UserDataUnlocked};
 use std::error::Error;
 
 pub fn register(path: &str) -> Result<(), Box<dyn Error>> {
@@ -47,6 +47,6 @@ pub fn register(path: &str) -> Result<(), Box<dyn Error>> {
     let private_data = PrivateData::new(password_key, private_key, vec![]);
 
     // encrypt password key
-    let user_file = UserFileUnlocked::new(public_data, private_data);
+    let user_file = UserDataUnlocked::new(public_data, private_data);
     save_user_file(path, &user_file, &master_key)
 }
