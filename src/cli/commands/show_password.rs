@@ -1,5 +1,5 @@
 use crate::cli::commands::utils::select_password_entry;
-use crate::user_file::UserDataUnlocked;
+use crate::data::user::UserDataUnlocked;
 use secrecy::ExposeSecret;
 use std::error::Error;
 

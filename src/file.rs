@@ -1,13 +1,13 @@
+use crate::crypto::SecretKey;
+use crate::data::user::{Lockable, UserDataLocked, UserDataUnlocked};
 use crate::error::PasswordManagerError;
-use crate::shared_file::SharedPassword;
-use crate::user_file::{Lockable, UserDataLocked, UserDataUnlocked};
+use crate::data::shared::SharedPassword;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs, io};
 use uuid::Uuid;
-use crate::crypto::SecretKey;
 
 pub const DATA_FILE_NAME: &str = "data";
 pub const SHARED_FILE_NAME: &str = "shared";

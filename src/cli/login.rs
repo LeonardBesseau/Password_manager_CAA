@@ -1,9 +1,9 @@
 use crate::cli::login::LoginResult::{EarlyAbort, Invalid, Success};
 use crate::crypto::{generate_master_key, SecretKey};
+use crate::data::user::{Unlockable, UserDataLocked, UserDataUnlocked};
 use crate::error::PasswordManagerError;
 use crate::file::{read_shared_file, read_user_file, remove_shared_file, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
-use crate::user_file::{Unlockable, UserDataLocked, UserDataUnlocked};
 use argon2::password_hash::SaltString;
 
 pub enum LoginResult {
@@ -21,7 +21,10 @@ fn login_setup(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), Passw
     for entry in entries {
         let password = entry.get_password()?;
         if !entry.verify(password.shared_by.clone().unwrap().as_str()) {
-            eprint!("Invalid signature for password supposedly shared by {}. Skipping", password.shared_by.unwrap());
+            eprint!(
+                "Invalid signature for password supposedly shared by {}. Skipping",
+                password.shared_by.unwrap()
+            );
             continue;
         }
         user_file.add_password(

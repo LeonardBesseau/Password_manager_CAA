@@ -1,6 +1,6 @@
+use crate::data::user::UserDataUnlocked;
 use crate::file::save_user_file;
 use crate::input::ask_for_password;
-use crate::user_file::UserDataUnlocked;
 use std::error::Error;
 
 pub fn change_master_password(

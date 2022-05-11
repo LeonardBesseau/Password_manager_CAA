@@ -1,11 +1,10 @@
+mod ca;
 mod cli;
 mod crypto;
+mod data;
 mod error;
 mod file;
 mod input;
-mod shared_file;
-mod user_file;
-mod ca;
 
 use cli::login::{login, LoginResult};
 use cli::register;

@@ -1,4 +1,4 @@
-use crate::user_file::UserDataUnlocked;
+use crate::data::user::UserDataUnlocked;
 use read_input::prelude::input;
 use read_input::{InputBuild, InputConstraints};
 

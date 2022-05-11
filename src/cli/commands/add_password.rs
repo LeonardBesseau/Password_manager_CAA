@@ -1,7 +1,7 @@
-use crate::file::save_user_file;
 use crate::crypto::SecretKey;
+use crate::data::user::UserDataUnlocked;
+use crate::file::save_user_file;
 use crate::input::{ask_for, ask_for_password};
-use crate::user_file::UserDataUnlocked;
 use std::error::Error;
 
 pub fn add_password(

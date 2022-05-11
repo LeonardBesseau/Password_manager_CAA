@@ -1,32 +1,36 @@
+use crate::ca::{sign_message, verify_message};
 use crate::crypto::{generate_password_key, SecretKey};
 use crate::error::PasswordManagerError;
-use crate::user_file::{Lockable, PasswordEntryLocked, PasswordEntryUnlocked, Unlockable};
+use ed25519_dalek::Signature;
 use secrecy::ExposeSecret;
 use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
-use ed25519_dalek::Signature;
-use crate::ca::{sign_message, verify_message};
+use crate::data::password::{PasswordEntryLocked, PasswordEntryUnlocked};
+use crate::data::user::{Lockable, Unlockable};
 
 pub struct SharedPassword {
     password: PasswordEntryLocked,
     password_key: SecretKey,
-    signature: Signature
+    signature: Signature,
 }
 
 impl SharedPassword {
-    pub fn new(password: PasswordEntryUnlocked, username: &str) -> Result<Self, PasswordManagerError> {
+    pub fn new(
+        password: PasswordEntryUnlocked,
+        username: &str,
+    ) -> Result<Self, PasswordManagerError> {
         let password_key = generate_password_key();
         let password = password.lock(&password_key)?;
         Ok(SharedPassword {
             password,
             password_key,
-            signature: sign_message(username)
+            signature: sign_message(username),
         })
     }
 
-    pub fn verify(&self, username: &str) -> bool{
+    pub fn verify(&self, username: &str) -> bool {
         verify_message(username, &self.signature)
     }
 
@@ -116,7 +120,7 @@ impl<'de> Deserialize<'de> for SharedPassword {
                 Ok(SharedPassword {
                     password,
                     password_key,
-                    signature
+                    signature,
                 })
             }
 
@@ -153,12 +157,11 @@ impl<'de> Deserialize<'de> for SharedPassword {
                 let password_key =
                     password_key.ok_or_else(|| de::Error::missing_field("password_key"))?;
                 let password = password.ok_or_else(|| de::Error::missing_field("password"))?;
-                let signature =
-                    signature.ok_or_else(|| de::Error::missing_field("signature"))?;
+                let signature = signature.ok_or_else(|| de::Error::missing_field("signature"))?;
                 Ok(SharedPassword {
                     password_key,
                     password,
-                    signature
+                    signature,
                 })
             }
         }

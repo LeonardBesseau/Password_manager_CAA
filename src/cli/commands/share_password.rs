@@ -1,12 +1,14 @@
 use crate::cli::commands::utils::select_password_entry;
+use crate::data::user::UserDataUnlocked;
+use crate::error::PasswordManagerError;
 use crate::file::{read_user_file, user_file_exists, write_shared_file};
 use crate::input::ask_for;
-use crate::shared_file::SharedPassword;
-use crate::user_file::UserDataUnlocked;
-use std::error::Error;
-use crate::error::PasswordManagerError;
+use crate::data::shared::SharedPassword;
 
-pub fn share_password(path: &str, user_file: &UserDataUnlocked) -> Result<(), PasswordManagerError> {
+pub fn share_password(
+    path: &str,
+    user_file: &UserDataUnlocked,
+) -> Result<(), PasswordManagerError> {
     let selected_entry = match select_password_entry(&user_file) {
         None => {
             return Ok(());
@@ -33,7 +35,10 @@ pub fn share_password(path: &str, user_file: &UserDataUnlocked) -> Result<(), Pa
     }
     let target_user_file = read_user_file(path, &username)?;
     if !target_user_file.verify_public_key() {
-        eprint!("Error public key for user {} was tampered with ! Aborting", target_user_file.public.username);
+        eprint!(
+            "Error public key for user {} was tampered with ! Aborting",
+            target_user_file.public.username
+        );
         return Err(PasswordManagerError::Security);
     }
     let mut csprng = rand_7::thread_rng();
