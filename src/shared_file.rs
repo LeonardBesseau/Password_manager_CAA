@@ -1,4 +1,4 @@
-use crate::password::{generate_password_key, SecretKey};
+use crate::crypto::{generate_password_key, SecretKey};
 use crate::user_file::{Lockable, PasswordEntryLocked, PasswordEntryUnlocked, Unlockable};
 use secrecy::ExposeSecret;
 use serde::de::{MapAccess, SeqAccess, Visitor};

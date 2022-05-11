@@ -1,7 +1,7 @@
 use crate::cli::login::LoginResult::{EarlyAbort, Invalid, Success};
 use crate::file_access::{read_shared_file, read_user_file, remove_shared_file, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
-use crate::password::{get_master_key, SecretKey};
+use crate::crypto::{generate_master_key, SecretKey};
 use crate::user_file::{Unlockable, UserFileUnlocked};
 use argon2::password_hash::SaltString;
 use std::error::Error;
@@ -60,7 +60,7 @@ pub fn login(
     // TODO manage salt error (Replace unwrapt by ? with custom error conversion)
     let salt = SaltString::b64_encode(&user_file.public.salt).unwrap();
 
-    let master_key = get_master_key(password.unwrap(), salt);
+    let master_key = generate_master_key(password.unwrap(), salt);
 
     if !user_file.verify(&master_key) {
         return Ok((Invalid, None));

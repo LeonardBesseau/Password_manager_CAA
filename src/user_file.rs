@@ -8,8 +8,8 @@ use std::fmt::{Display, Formatter};
 use chacha20poly1305::aead::{Aead, NewAead, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 
-use crate::password::{
-    compute_hash, generate_nonce, generate_password_key, get_master_key, EncryptedData, Nonce,
+use crate::crypto::{
+    compute_hash, generate_nonce, generate_password_key, generate_master_key, EncryptedData, Nonce,
     Salt, SecretKey,
 };
 use constant_time_eq::constant_time_eq;
@@ -434,7 +434,7 @@ impl UserFileUnlocked {
         let mut salt_buf: [u8; 16] = [0; 16];
         let salt = SaltString::generate(&mut OsRng);
         salt.b64_decode(&mut salt_buf).unwrap();
-        let master_key = get_master_key(new_password, salt);
+        let master_key = generate_master_key(new_password, salt);
         let password_key = generate_password_key();
         let mut csprng = rand_7::thread_rng();
         let (private_key, public_key) = ecies_ed25519::generate_keypair(&mut csprng);

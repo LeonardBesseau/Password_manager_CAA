@@ -12,7 +12,7 @@ pub type SecretKey = SecretVec<u8>;
 pub type Nonce = [u8; 24];
 pub type Salt = [u8; 16];
 
-pub fn get_master_key(master_password: SecretString, salt: SaltString) -> SecretVec<u8> {
+pub fn generate_master_key(master_password: SecretString, salt: SaltString) -> SecretVec<u8> {
     let mut param_builder = ParamsBuilder::new();
     param_builder.output_len(32).unwrap();
     param_builder.t_cost(10).unwrap();

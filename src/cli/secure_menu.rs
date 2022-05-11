@@ -4,7 +4,7 @@ use crate::cli::commands::generate_password;
 use crate::cli::commands::share_password::share_password;
 use crate::cli::commands::show_password::show_password;
 use crate::cli::commands::verify_password::verify_password_strength;
-use crate::password::SecretKey;
+use crate::crypto::SecretKey;
 use crate::user_file::UserFileUnlocked;
 use read_input::prelude::input;
 use read_input::{InputBuild, InputConstraints};

@@ -1,40 +1,8 @@
 use crate::file_access::write_user_file;
-use crate::password::SecretKey;
+use crate::crypto::SecretKey;
 use crate::user_file::{Lockable, UserFileUnlocked};
 use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::io;
 
-#[derive(Debug)]
-pub enum PasswordManagerError {
-    Io(io::Error),
-    Serialisation(bincode::Error),
-}
-
-impl Display for PasswordManagerError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            PasswordManagerError::Io(ref err) => write!(f, "IO error: {}", err),
-            PasswordManagerError::Serialisation(ref err) => {
-                write!(f, "Serialisation error: {}", err)
-            }
-        }
-    }
-}
-
-impl From<io::Error> for PasswordManagerError {
-    fn from(err: io::Error) -> PasswordManagerError {
-        PasswordManagerError::Io(err)
-    }
-}
-
-impl From<bincode::Error> for PasswordManagerError {
-    fn from(err: bincode::Error) -> PasswordManagerError {
-        PasswordManagerError::Serialisation(err)
-    }
-}
-
-impl Error for PasswordManagerError {}
 
 pub(crate) fn save_user_file(
     path: &str,

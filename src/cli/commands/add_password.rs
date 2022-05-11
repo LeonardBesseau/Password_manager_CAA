@@ -1,6 +1,6 @@
 use crate::common::save_user_file;
 use crate::input::{ask_for, ask_for_password};
-use crate::password::SecretKey;
+use crate::crypto::SecretKey;
 use crate::user_file::UserFileUnlocked;
 use std::error::Error;
 

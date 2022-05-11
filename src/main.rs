@@ -2,7 +2,7 @@ mod common;
 mod input;
 mod file_access;
 mod user_file;
-mod password;
+mod crypto;
 mod shared_file;
 mod cli;
 
