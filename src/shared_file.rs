@@ -1,10 +1,10 @@
 use crate::crypto::{generate_password_key, SecretKey};
+use crate::error::PasswordManagerError;
 use crate::user_file::{Lockable, PasswordEntryLocked, PasswordEntryUnlocked, Unlockable};
 use secrecy::ExposeSecret;
 use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-use std::error::Error;
 use std::fmt;
 
 pub struct SharedPassword {
@@ -13,7 +13,7 @@ pub struct SharedPassword {
 }
 
 impl SharedPassword {
-    pub fn new(password: PasswordEntryUnlocked) -> Result<Self, Box<dyn Error>> {
+    pub fn new(password: PasswordEntryUnlocked) -> Result<Self, PasswordManagerError> {
         let password_key = generate_password_key();
         let password = password.lock(&password_key)?;
         Ok(SharedPassword {
@@ -22,7 +22,7 @@ impl SharedPassword {
         })
     }
 
-    pub fn get_password(&self) -> Result<PasswordEntryUnlocked, Box<dyn Error>> {
+    pub fn get_password(&self) -> Result<PasswordEntryUnlocked, PasswordManagerError> {
         Ok(self.password.unlock(&self.password_key)?)
     }
 }

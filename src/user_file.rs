@@ -1,41 +1,32 @@
-use argon2::password_hash::SaltString;
 use secrecy::{ExposeSecret, SecretString, Zeroize};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-use std::error::Error;
 use std::fmt;
-use std::fmt::{Display, Formatter};
 
 use chacha20poly1305::aead::{Aead, NewAead, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 
 use crate::crypto::{
-    compute_hash, generate_nonce, generate_password_key, generate_master_key, EncryptedData, Nonce,
-    Salt, SecretKey,
+    compute_hash, generate_asymmetric_key, generate_master_key, generate_nonce,
+    generate_password_key, generate_salt, EncryptedData, Nonce, Salt, SecretKey,
 };
+use crate::error::PasswordManagerError;
 use constant_time_eq::constant_time_eq;
 use ecies_ed25519::PublicKey;
-use rand_core::OsRng;
 use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 
-#[derive(Debug)]
-pub enum UserFileError {
-    Encryption(chacha20poly1305::aead::Error),
-    Serialisation(bincode::Error),
-}
-
 pub trait Lockable<T: Unlockable<Self>>: Sized {
-    fn lock(&self, key: &SecretKey) -> Result<T, UserFileError>;
+    fn lock(&self, key: &SecretKey) -> Result<T, PasswordManagerError>;
 }
 
 pub trait Unlockable<T: Lockable<Self>>: Sized {
-    fn unlock(&self, key: &SecretKey) -> Result<T, UserFileError>;
+    fn unlock(&self, key: &SecretKey) -> Result<T, PasswordManagerError>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublicData {
     pub nonce: Nonce,
-    pub salt: Salt,
+    pub salt: Salt, // Salt string is not serializable, so we use an array
     pub hash: String,
     pub username: String,
     pub public_key: PublicKey,
@@ -73,29 +64,6 @@ pub struct UserFileLocked {
 pub struct UserFileUnlocked {
     pub public: PublicData,
     private: PrivateData,
-}
-
-impl Error for UserFileError {}
-
-impl Display for UserFileError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            UserFileError::Encryption(ref err) => write!(f, "Encryption/Decryption error {}", err),
-            UserFileError::Serialisation(ref err) => write!(f, "Serialisation error: {}", err),
-        }
-    }
-}
-
-impl From<chacha20poly1305::aead::Error> for UserFileError {
-    fn from(err: chacha20poly1305::aead::Error) -> UserFileError {
-        UserFileError::Encryption(err)
-    }
-}
-
-impl From<bincode::Error> for UserFileError {
-    fn from(err: bincode::Error) -> UserFileError {
-        UserFileError::Serialisation(err)
-    }
 }
 
 impl Clone for PrivateData {
@@ -259,7 +227,7 @@ impl PrivateData {
         self,
         new_key: SecretKey,
         new_private_key: ecies_ed25519::SecretKey,
-    ) -> Result<Self, UserFileError> {
+    ) -> Result<Self, PasswordManagerError> {
         let mut new_entries: Vec<PasswordEntryLocked> = Vec::with_capacity(self.passwords.len());
         for entry in self.passwords {
             new_entries.push(entry.unlock(&self.password_key)?.lock(&new_key)?);
@@ -273,7 +241,7 @@ impl PrivateData {
 }
 
 impl Unlockable<PasswordEntryUnlocked> for PasswordEntryLocked {
-    fn unlock(&self, key: &SecretKey) -> Result<PasswordEntryUnlocked, UserFileError> {
+    fn unlock(&self, key: &SecretKey) -> Result<PasswordEntryUnlocked, PasswordManagerError> {
         let key = Key::from_slice(key.expose_secret().as_slice());
         let nonce = XNonce::from_slice(self.nonce.as_slice());
         let aead = XChaCha20Poly1305::new(&key);
@@ -292,7 +260,7 @@ impl Unlockable<PasswordEntryUnlocked> for PasswordEntryLocked {
 }
 
 impl Lockable<PasswordEntryLocked> for PasswordEntryUnlocked {
-    fn lock(&self, key: &SecretKey) -> Result<PasswordEntryLocked, UserFileError> {
+    fn lock(&self, key: &SecretKey) -> Result<PasswordEntryLocked, PasswordManagerError> {
         let key = Key::from_slice(key.expose_secret().as_slice());
         let nonce = generate_nonce();
         let aead = XChaCha20Poly1305::new(&key);
@@ -331,7 +299,7 @@ impl Zeroize for PasswordEntryLocked {
 }
 
 impl Unlockable<UserFileUnlocked> for UserFileLocked {
-    fn unlock(&self, key: &SecretKey) -> Result<UserFileUnlocked, UserFileError> {
+    fn unlock(&self, key: &SecretKey) -> Result<UserFileUnlocked, PasswordManagerError> {
         let key = Key::from_slice(key.expose_secret().as_slice());
         let nonce = XNonce::from_slice(self.public.nonce.as_slice());
         let aead = XChaCha20Poly1305::new(&key);
@@ -365,7 +333,7 @@ impl UserFileLocked {
 }
 
 impl Lockable<UserFileLocked> for UserFileUnlocked {
-    fn lock(&self, key: &SecretKey) -> Result<UserFileLocked, UserFileError> {
+    fn lock(&self, key: &SecretKey) -> Result<UserFileLocked, PasswordManagerError> {
         let key = Key::from_slice(key.expose_secret().as_slice());
         let nonce = generate_nonce();
         let aead = XChaCha20Poly1305::new(&key);
@@ -406,14 +374,17 @@ impl UserFileUnlocked {
         username: &str,
         password: SecretString,
         shared_by: Option<String>,
-    ) -> Result<(), UserFileError> {
+    ) -> Result<(), PasswordManagerError> {
         let entry = PasswordEntryUnlocked::new(site, username, password, shared_by)
             .lock(&self.private.password_key)?;
         self.private.passwords.push(entry);
         Ok(())
     }
 
-    pub fn get_password(&self, index: usize) -> Result<PasswordEntryUnlocked, UserFileError> {
+    pub fn get_password(
+        &self,
+        index: usize,
+    ) -> Result<PasswordEntryUnlocked, PasswordManagerError> {
         self.private
             .passwords
             .get(index)
@@ -429,15 +400,11 @@ impl UserFileUnlocked {
     pub fn change_key(
         self,
         new_password: SecretString,
-    ) -> Result<(Self, SecretKey), UserFileError> {
-        // TODO refactor to remove duplicate with register
-        let mut salt_buf: [u8; 16] = [0; 16];
-        let salt = SaltString::generate(&mut OsRng);
-        salt.b64_decode(&mut salt_buf).unwrap();
-        let master_key = generate_master_key(new_password, salt);
+    ) -> Result<(Self, SecretKey), PasswordManagerError> {
+        let (salt, salt_buf) = generate_salt();
+        let master_key = generate_master_key(new_password, &salt)?;
         let password_key = generate_password_key();
-        let mut csprng = rand_7::thread_rng();
-        let (private_key, public_key) = ecies_ed25519::generate_keypair(&mut csprng);
+        let (private_key, public_key) = generate_asymmetric_key();
         let private_data = self.private.change_key(password_key, private_key)?;
         let public_data = PublicData::new(
             salt_buf,
@@ -451,7 +418,7 @@ impl UserFileUnlocked {
 }
 
 impl PublicData {
-    pub fn new(salt: [u8; 16], hash: String, username: &String, public_key: PublicKey) -> Self {
+    pub fn new(salt: Salt, hash: String, username: &String, public_key: PublicKey) -> Self {
         PublicData {
             nonce: [0; 24], // We set the nonce to 0 as it will be overwritten when locking the file
             salt,

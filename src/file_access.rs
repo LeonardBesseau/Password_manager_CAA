@@ -1,49 +1,15 @@
+use crate::error::PasswordManagerError;
 use crate::shared_file::SharedPassword;
 use crate::user_file::UserFileLocked;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs, io};
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub enum FileAccessError {
-    Io(io::Error),
-    Serialisation(bincode::Error),
-    Encryption(ecies_ed25519::Error),
-}
-
-impl Error for FileAccessError {}
-
-impl Display for FileAccessError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            FileAccessError::Io(ref err) => write!(f, "IO error: {}", err),
-            FileAccessError::Serialisation(ref err) => write!(f, "Serialisation error: {}", err),
-            FileAccessError::Encryption(ref _err) => write!(f, "Encryption error:"),
-        }
-    }
-}
-
-impl From<io::Error> for FileAccessError {
-    fn from(err: io::Error) -> FileAccessError {
-        FileAccessError::Io(err)
-    }
-}
-
-impl From<bincode::Error> for FileAccessError {
-    fn from(err: bincode::Error) -> FileAccessError {
-        FileAccessError::Serialisation(err)
-    }
-}
-
-impl From<ecies_ed25519::Error> for FileAccessError {
-    fn from(err: ecies_ed25519::Error) -> FileAccessError {
-        FileAccessError::Encryption(err)
-    }
-}
+pub const DATA_FILE_NAME: &str = "data";
+pub const SHARED_FILE_NAME: &str = "shared";
 
 fn get_uuid(username: &str) -> Uuid {
     Uuid::new_v5(&Uuid::NAMESPACE_OID, username.as_bytes())
@@ -51,12 +17,12 @@ fn get_uuid(username: &str) -> Uuid {
 
 fn get_user_filepath(path: &str, username: &str) -> String {
     let uuid = get_uuid(username);
-    format!("{}/{}/data", path, uuid)
+    format!("{}/{}/{}", path, uuid, DATA_FILE_NAME)
 }
 
 fn get_user_shared_filepath(path: &str, username: &str) -> String {
     let uuid = get_uuid(username);
-    format!("{}/{}/shared", path, uuid)
+    format!("{}/{}/{}", path, uuid, SHARED_FILE_NAME)
 }
 
 pub(crate) fn create_user_directory(path: &str, username: &str) -> Result<(), Box<dyn Error>> {
@@ -66,7 +32,7 @@ pub(crate) fn create_user_directory(path: &str, username: &str) -> Result<(), Bo
 
 pub(crate) fn user_file_exists(path: &str, username: &str) -> bool {
     let uuid = get_uuid(username);
-    Path::new(format!("{}/{}/data", path, uuid).as_str()).exists()
+    Path::new(format!("{}/{}/{}", path, uuid, DATA_FILE_NAME).as_str()).exists()
 }
 
 pub(crate) fn write_user_file(
@@ -80,7 +46,10 @@ pub(crate) fn write_user_file(
     Ok(())
 }
 
-pub(crate) fn read_user_file(path: &str, username: &str) -> Result<UserFileLocked, Box<dyn Error>> {
+pub(crate) fn read_user_file(
+    path: &str,
+    username: &str,
+) -> Result<UserFileLocked, PasswordManagerError> {
     let reader = BufReader::new(File::open(get_user_filepath(path, username))?);
     let data: UserFileLocked = bincode::deserialize_from(reader)?;
     Ok(data)
@@ -90,22 +59,21 @@ pub(crate) fn write_shared_file(
     path: &str,
     username: &str,
     data: Vec<u8>,
-) -> Result<(), FileAccessError> {
+) -> Result<(), PasswordManagerError> {
     let mut passwords: Vec<Vec<u8>> = vec![];
     passwords.push(data);
     let file_result = File::open(get_user_shared_filepath(path, username));
     if file_result.is_err() {
         let error = file_result.err().unwrap();
         if error.kind() != io::ErrorKind::NotFound {
-            return Err(FileAccessError::from(error));
+            return Err(PasswordManagerError::from(error));
         }
     } else {
         let file = file_result?;
         if (&file).metadata()?.len() != 0 {
-            // TODO check if reserving vector might be useful
             let reader = BufReader::new(file);
-            let mut p: Vec<Vec<u8>> = bincode::deserialize_from(reader)?;
-            passwords.append(&mut p);
+            let mut password: Vec<Vec<u8>> = bincode::deserialize_from(reader)?;
+            passwords.append(&mut password);
         }
     }
 
@@ -119,15 +87,14 @@ pub(crate) fn read_shared_file(
     path: &str,
     username: &str,
     key: &ecies_ed25519::SecretKey,
-) -> Result<Vec<SharedPassword>, FileAccessError> {
-    // TODO manage empty file exception
+) -> Result<Vec<SharedPassword>, PasswordManagerError> {
     let file_result = File::open(get_user_shared_filepath(path, username));
     if file_result.is_err() {
         let error = file_result.err().unwrap();
         return if error.kind() == io::ErrorKind::NotFound {
             Ok(vec![])
         } else {
-            Err(FileAccessError::from(error))
+            Err(PasswordManagerError::from(error))
         };
     }
     let file = file_result?;
@@ -142,12 +109,12 @@ pub(crate) fn read_shared_file(
     Ok(output)
 }
 
-pub(crate) fn remove_shared_file(path: &str, username: &str) -> Result<(), FileAccessError> {
+pub(crate) fn remove_shared_file(path: &str, username: &str) -> Result<(), PasswordManagerError> {
     let result = fs::remove_file(get_user_shared_filepath(path, username));
     if result.is_err() {
         let error = result.err().unwrap();
         if error.kind() != io::ErrorKind::NotFound {
-            return Err(FileAccessError::from(error));
+            return Err(PasswordManagerError::from(error));
         };
     }
     Ok(())

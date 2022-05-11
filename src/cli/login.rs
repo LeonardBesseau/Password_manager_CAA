@@ -1,10 +1,10 @@
 use crate::cli::login::LoginResult::{EarlyAbort, Invalid, Success};
+use crate::crypto::{generate_master_key, SecretKey};
+use crate::error::PasswordManagerError;
 use crate::file_access::{read_shared_file, read_user_file, remove_shared_file, user_file_exists};
 use crate::input::{ask_for_password, ask_for_username};
-use crate::crypto::{generate_master_key, SecretKey};
 use crate::user_file::{Unlockable, UserFileUnlocked};
 use argon2::password_hash::SaltString;
-use std::error::Error;
 
 pub enum LoginResult {
     EarlyAbort,
@@ -12,7 +12,7 @@ pub enum LoginResult {
     Success,
 }
 
-fn login_setup(path: &str, user_file: &mut UserFileUnlocked) -> Result<(), Box<dyn Error>> {
+fn login_setup(path: &str, user_file: &mut UserFileUnlocked) -> Result<(), PasswordManagerError> {
     let entries = read_shared_file(
         path,
         &user_file.public.username,
@@ -34,7 +34,7 @@ fn login_setup(path: &str, user_file: &mut UserFileUnlocked) -> Result<(), Box<d
 
 pub fn login(
     path: &str,
-) -> Result<(LoginResult, Option<(UserFileUnlocked, SecretKey)>), Box<dyn Error>> {
+) -> Result<(LoginResult, Option<(UserFileUnlocked, SecretKey)>), PasswordManagerError> {
     let mut username;
     loop {
         let user_input = ask_for_username();
@@ -58,9 +58,8 @@ pub fn login(
     }
 
     // TODO manage salt error (Replace unwrapt by ? with custom error conversion)
-    let salt = SaltString::b64_encode(&user_file.public.salt).unwrap();
-
-    let master_key = generate_master_key(password.unwrap(), salt);
+    let salt = SaltString::b64_encode(&user_file.public.salt)?;
+    let master_key = generate_master_key(password.unwrap(), &salt)?;
 
     if !user_file.verify(&master_key) {
         return Ok((Invalid, None));
