@@ -16,7 +16,7 @@ pub(crate) fn menu(
     mut user_file: UserDataUnlocked,
     master_key: SecretKey,
 ) -> Result<(), Box<dyn Error>> {
-    println!("Welcome {} !", user_file.public.username);
+    println!("Welcome {} !", user_file.identity.username);
     loop {
         match input::<i32>()
             .repeat_msg(
@@ -34,7 +34,7 @@ pub(crate) fn menu(
             .get()
         {
             0 => {
-                println!("Goodbye {}!", user_file.public.username);
+                println!("Goodbye {}!", user_file.identity.username);
                 return Ok(());
             }
             1 => add_password(path, &mut user_file, &master_key)?,

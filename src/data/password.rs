@@ -1,10 +1,13 @@
+use std::fmt;
 use crate::crypto::{generate_nonce, EncryptedData, Nonce, SecretKey};
 use crate::data::user::{Lockable, Unlockable};
 use crate::error::PasswordManagerError;
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use secrecy::{ExposeSecret, SecretString, Zeroize};
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::{MapAccess, SeqAccess, Visitor};
+use serde::ser::SerializeStruct;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Password {
@@ -138,5 +141,154 @@ impl Zeroize for PasswordEntryLocked {
         self.password.zeroize();
         self.site.zeroize();
         self.username.zeroize();
+    }
+}
+
+impl Serialize for PasswordEntryUnlocked {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("PasswordEntryUnlocked", 4)?;
+        state.serialize_field("site", &self.site)?;
+        state.serialize_field("username", &self.username)?;
+        state.serialize_field("password", &self.password.expose_secret())?;
+        state.serialize_field("shared_by", &self.shared_by)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for PasswordEntryUnlocked {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+    {
+        enum Field {
+            Site,
+            Username,
+            Password,
+            SharedBy,
+        }
+
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+                where
+                    D: Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl<'de> Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("`site` or `username` or `password` or `shared_by`")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                        where
+                            E: de::Error,
+                    {
+                        match value {
+                            "site" => Ok(Field::Site),
+                            "username" => Ok(Field::Username),
+                            "password" => Ok(Field::Password),
+                            "shared_by" => Ok(Field::SharedBy),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct PrivateDataVisitor;
+
+        impl<'de> Visitor<'de> for PrivateDataVisitor {
+            type Value = PasswordEntryUnlocked;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct PasswordEntryUnlocked")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<PasswordEntryUnlocked, V::Error>
+                where
+                    V: SeqAccess<'de>,
+            {
+                let site = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let username = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let password: String = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let password = SecretString::new(password);
+                let shared_by = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                Ok(PasswordEntryUnlocked {
+                    site,
+                    username,
+                    password,
+                    shared_by,
+                })
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<PasswordEntryUnlocked, V::Error>
+                where
+                    V: MapAccess<'de>,
+            {
+                let mut site = None;
+                let mut username = None;
+                let mut password = None;
+                let mut shared_by = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Site => {
+                            if site.is_some() {
+                                return Err(de::Error::duplicate_field("site"));
+                            }
+                            site = Some(map.next_value()?);
+                        }
+                        Field::Username => {
+                            if username.is_some() {
+                                return Err(de::Error::duplicate_field("username"));
+                            }
+                            username = Some(map.next_value()?);
+                        }
+                        Field::Password => {
+                            if password.is_some() {
+                                return Err(de::Error::duplicate_field("password"));
+                            }
+                            let p: String = map.next_value()?;
+                            password = Some(SecretString::new(p));
+                        }
+                        Field::SharedBy => {
+                            if shared_by.is_some() {
+                                return Err(de::Error::duplicate_field("shared_by"));
+                            }
+                            shared_by = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let site =
+                    site.ok_or_else(|| de::Error::missing_field("site"))?;
+                let username =
+                    username.ok_or_else(|| de::Error::missing_field("username"))?;
+                let password =
+                    password.ok_or_else(|| de::Error::missing_field("password"))?;
+                let shared_by = shared_by.ok_or_else(|| de::Error::missing_field("shared_by"))?;
+                Ok(PasswordEntryUnlocked {
+                    site,
+                    username,
+                    password,
+                    shared_by,
+                })
+            }
+        }
+        const FIELDS: &'static [&'static str] = &["site", "username", "password", "shared_by"];
+        deserializer.deserialize_struct("PasswordEntryUnlocked", FIELDS, PrivateDataVisitor)
     }
 }

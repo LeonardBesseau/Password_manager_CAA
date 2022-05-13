@@ -10,17 +10,21 @@ use crate::error::PasswordManagerError;
 
 pub struct PrivateData {
     pub(crate) password_key: SecretKey,
-    pub(crate) private_key: ecies_ed25519::SecretKey,
+    pub(crate) sharing_private_key: ecies_ed25519::SecretKey,
+    pub(crate) signing_private_key: ed25519_dalek::SecretKey,
     pub(crate) passwords: Vec<PasswordEntryLocked>,
 }
 
 impl Clone for PrivateData {
     fn clone(&self) -> Self {
-        let mut bits: [u8; 32] = [0u8; 32];
-        bits.copy_from_slice(self.private_key.as_bytes());
+        let mut bits_1: [u8; 32] = [0u8; 32];
+        let mut bits_2: [u8; 32] = [0u8; 32];
+        bits_1.copy_from_slice(self.sharing_private_key.as_bytes());
+        bits_2.copy_from_slice(self.signing_private_key.as_bytes());
         PrivateData {
             password_key: SecretKey::new(self.password_key.expose_secret().clone()),
-            private_key: ecies_ed25519::SecretKey::from_bytes(bits.as_slice()).unwrap(),
+            sharing_private_key: ecies_ed25519::SecretKey::from_bytes(bits_1.as_slice()).unwrap(),
+            signing_private_key: ed25519_dalek::SecretKey::from_bytes(bits_2.as_slice()).unwrap(),
             passwords: self.passwords.clone(),
         }
     }
@@ -31,9 +35,10 @@ impl Serialize for PrivateData {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("PrivateData", 3)?;
+        let mut state = serializer.serialize_struct("PrivateData", 4)?;
         state.serialize_field("password_key", &self.password_key.expose_secret())?;
-        state.serialize_field("private_key", &self.private_key)?;
+        state.serialize_field("sharing_private_key", &self.sharing_private_key)?;
+        state.serialize_field("signature_private_key", &self.signing_private_key)?;
         state.serialize_field("passwords", &self.passwords)?;
         state.end()
     }
@@ -46,7 +51,8 @@ impl<'de> Deserialize<'de> for PrivateData {
     {
         enum Field {
             PasswordKey,
-            PrivateKey,
+            SharingPrivateKey,
+            SignaturePrivateKey,
             Passwords,
         }
 
@@ -61,7 +67,7 @@ impl<'de> Deserialize<'de> for PrivateData {
                     type Value = Field;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("`password_key` or `private_key` or `passwords`")
+                        formatter.write_str("`password_key` or `sharing_private_key` or `signature_private_key` or `passwords`")
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<Field, E>
@@ -70,7 +76,8 @@ impl<'de> Deserialize<'de> for PrivateData {
                     {
                         match value {
                             "password_key" => Ok(Field::PasswordKey),
-                            "private_key" => Ok(Field::PrivateKey),
+                            "sharing_private_key" => Ok(Field::SharingPrivateKey),
+                            "signature_private_key" => Ok(Field::SignaturePrivateKey),
                             "passwords" => Ok(Field::Passwords),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
                         }
@@ -98,7 +105,10 @@ impl<'de> Deserialize<'de> for PrivateData {
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
                 let password_key = SecretKey::new(password_key);
-                let private_key = seq
+                let sharing_private_key = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let signature_private_key = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
                 let passwords = seq
@@ -106,7 +116,8 @@ impl<'de> Deserialize<'de> for PrivateData {
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
                 Ok(PrivateData {
                     password_key,
-                    private_key,
+                    sharing_private_key,
+                    signing_private_key: signature_private_key,
                     passwords,
                 })
             }
@@ -116,7 +127,8 @@ impl<'de> Deserialize<'de> for PrivateData {
                 V: MapAccess<'de>,
             {
                 let mut password_key = None;
-                let mut private_key = None;
+                let mut sharing_private_key = None;
+                let mut signature_private_key = None;
                 let mut passwords = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -127,11 +139,17 @@ impl<'de> Deserialize<'de> for PrivateData {
                             let p: Vec<u8> = map.next_value()?;
                             password_key = Some(SecretKey::new(p));
                         }
-                        Field::PrivateKey => {
-                            if private_key.is_some() {
-                                return Err(de::Error::duplicate_field("private_key"));
+                        Field::SharingPrivateKey => {
+                            if sharing_private_key.is_some() {
+                                return Err(de::Error::duplicate_field("sharing_private_key"));
                             }
-                            private_key = Some(map.next_value()?);
+                            sharing_private_key = Some(map.next_value()?);
+                        },
+                        Field::SignaturePrivateKey => {
+                            if signature_private_key.is_some() {
+                                return Err(de::Error::duplicate_field("signature_private_key"));
+                            }
+                            signature_private_key = Some(map.next_value()?);
                         }
                         Field::Passwords => {
                             if passwords.is_some() {
@@ -143,17 +161,20 @@ impl<'de> Deserialize<'de> for PrivateData {
                 }
                 let password_key =
                     password_key.ok_or_else(|| de::Error::missing_field("password_key"))?;
-                let private_key =
-                    private_key.ok_or_else(|| de::Error::missing_field("private_key"))?;
+                let sharing_private_key =
+                    sharing_private_key.ok_or_else(|| de::Error::missing_field("sharing_private_key"))?;
+                let signature_private_key =
+                    signature_private_key.ok_or_else(|| de::Error::missing_field("signature_private_key"))?;
                 let passwords = passwords.ok_or_else(|| de::Error::missing_field("passwords"))?;
                 Ok(PrivateData {
                     password_key,
-                    private_key,
+                    sharing_private_key,
+                    signing_private_key: signature_private_key,
                     passwords,
                 })
             }
         }
-        const FIELDS: &'static [&'static str] = &["password_key", "private_key", "passwords"];
+        const FIELDS: &'static [&'static str] = &["password_key", "sharing_private_key", "signature_private_key","passwords"];
         deserializer.deserialize_struct("PrivateData", FIELDS, PrivateDataVisitor)
     }
 }
@@ -161,12 +182,14 @@ impl<'de> Deserialize<'de> for PrivateData {
 impl PrivateData {
     pub fn new(
         password_key: SecretKey,
-        private_key: ecies_ed25519::SecretKey,
+        sharing_private_key: ecies_ed25519::SecretKey,
+        signature_private_key: ed25519_dalek::SecretKey,
         passwords: Vec<PasswordEntryLocked>,
     ) -> Self {
         PrivateData {
             password_key,
-            private_key,
+            sharing_private_key,
+            signing_private_key: signature_private_key,
             passwords,
         }
     }
@@ -174,7 +197,8 @@ impl PrivateData {
     pub fn change_key(
         self,
         new_key: SecretKey,
-        new_private_key: ecies_ed25519::SecretKey,
+        new_sharing_private_key: ecies_ed25519::SecretKey,
+        new_signature_private_key: ed25519_dalek::SecretKey,
     ) -> Result<Self, PasswordManagerError> {
         let mut new_entries: Vec<PasswordEntryLocked> = Vec::with_capacity(self.passwords.len());
         for entry in self.passwords {
@@ -182,7 +206,8 @@ impl PrivateData {
         }
         Ok(PrivateData {
             password_key: new_key,
-            private_key: new_private_key,
+            sharing_private_key: new_sharing_private_key,
+            signing_private_key: new_signature_private_key,
             passwords: new_entries,
         })
     }

@@ -15,26 +15,35 @@ pub enum LoginResult {
 fn login_setup(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), PasswordManagerError> {
     let entries = read_shared_file(
         path,
-        &user_file.public.username,
-        user_file.get_private_key(),
+        &user_file.identity.username,
+        user_file.get_private_sharing_key(),
     )?;
     for entry in entries {
-        let password = entry.get_password()?;
-        if !entry.verify(password.shared_by.clone().unwrap().as_str()) {
+        let password = &entry.password;
+        let sender_username =  &password.shared_by.clone().unwrap();
+        let sender_info = read_user_file(path, &sender_username.as_str())?;
+        if !sender_info.verify_identity() {
+            eprint!(
+                "Identity for {} was found invalid. Skipping",
+                sender_username
+            );
+            continue;
+        }
+        if !entry.verify(&sender_username.as_str(), &sender_info.identity.signing_public_key)? {
             eprint!(
                 "Invalid signature for password supposedly shared by {}. Skipping",
-                password.shared_by.unwrap()
+                sender_username
             );
             continue;
         }
         user_file.add_password(
-            password.site.as_str(),
-            password.username.as_str(),
-            password.password,
-            password.shared_by,
+            entry.password.site.as_str(),
+            entry.password.username.as_str(),
+            entry.password.password,
+            entry.password.shared_by,
         )?;
     }
-    remove_shared_file(path, &user_file.public.username)?;
+    remove_shared_file(path, &user_file.identity.username)?;
     Ok(())
 }
 
@@ -66,6 +75,10 @@ pub fn login(
 
     if !user_file.verify_master_key(&master_key) {
         return Ok((Invalid, None));
+    }
+    if !user_file.verify_identity() {
+        eprint!("Tampering Detected ! Aborting.");
+        return Err(PasswordManagerError::Security);
     }
 
     // Verify auth and decrypt

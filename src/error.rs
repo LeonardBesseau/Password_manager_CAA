@@ -58,3 +58,9 @@ impl From<password_hash::Error> for PasswordManagerError {
         PasswordManagerError::Security
     }
 }
+
+impl From<ed25519_dalek::SignatureError> for PasswordManagerError {
+    fn from(_err: ed25519_dalek::SignatureError) -> PasswordManagerError {
+        PasswordManagerError::Security
+    }
+}
