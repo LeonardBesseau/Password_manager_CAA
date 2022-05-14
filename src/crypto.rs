@@ -4,7 +4,6 @@ use argon2::{
     Algorithm, Argon2, ParamsBuilder, Version,
 };
 use ecies_ed25519::{PublicKey as SharingKeyPublic, SecretKey as SharingKeyPrivate};
-
 use ed25519_dalek::{PublicKey as SigningKeyPublic, SecretKey as SigningKeyPrivate, Keypair, Signature, Signer, Verifier};
 use hkdf::Hkdf;
 use rand_core::{OsRng, RngCore};

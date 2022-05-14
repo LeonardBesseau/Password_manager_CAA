@@ -41,7 +41,7 @@ pub fn share_password(
     }
     let mut data = user_file.get_password(selected_entry)?;
     data.shared_by = Some(user_file.identity.username.clone());
-    let shared = SharedPassword::new(data, &user_file.identity.username, user_file.get_private_signing_key(), &user_file.identity.signing_public_key)?;
+    let shared = SharedPassword::new(data, &username,user_file.get_private_signing_key(), &user_file.identity.signing_public_key)?;
     let shared = bincode::serialize(&shared)?;
 
     let output = share_message(&target_user_file.identity.sharing_public_key, shared.as_slice())?;

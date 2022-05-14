@@ -12,7 +12,7 @@ pub enum LoginResult {
     Success,
 }
 
-fn login_setup(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), PasswordManagerError> {
+fn convert_shared_password(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), PasswordManagerError> {
     let entries = read_shared_file(
         path,
         &user_file.identity.username,
@@ -20,7 +20,7 @@ fn login_setup(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), Passw
     )?;
     for entry in entries {
         let password = &entry.password;
-        let sender_username =  &password.shared_by.clone().unwrap();
+        let sender_username = &password.shared_by.clone().unwrap();
         let sender_info = read_user_file(path, &sender_username.as_str())?;
         if !sender_info.verify_identity() {
             eprint!(
@@ -29,7 +29,7 @@ fn login_setup(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), Passw
             );
             continue;
         }
-        if !entry.verify(&sender_username.as_str(), &sender_info.identity.signing_public_key)? {
+        if !entry.verify(&user_file.identity.username, &sender_info.identity.signing_public_key)? {
             eprint!(
                 "Invalid signature for password supposedly shared by {}. Skipping",
                 sender_username
@@ -83,6 +83,6 @@ pub fn login(
 
     // Verify auth and decrypt
     let mut user_file = user_file.unlock(&master_key)?;
-    login_setup(path, &mut user_file)?;
+    convert_shared_password(path, &mut user_file)?;
     Ok((Success, Some((user_file, master_key))))
 }
