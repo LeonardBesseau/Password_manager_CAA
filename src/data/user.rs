@@ -1,23 +1,16 @@
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
-use chacha20poly1305::aead::{Aead, NewAead, Payload};
-use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
-use crate::crypto::{compute_hash, EncryptedData, generate_sharing_key, generate_master_key, generate_nonce, generate_password_key, generate_salt, Nonce, SecretKey, generate_signing_key};
-use crate::data::password::{PasswordEntryLocked, PasswordEntryUnlocked};
-use crate::error::PasswordManagerError;
-use constant_time_eq::constant_time_eq;
+use crate::crypto::{compute_hash, EncryptedData, generate_keys, generate_master_key, generate_nonce, generate_salt, Nonce, SecretKey};
 use crate::data::identity::Identity;
+use crate::data::password::{PasswordEntryLocked, PasswordEntryUnlocked};
 use crate::data::private::PrivateData;
 use crate::data::public::PublicData;
-
-pub trait Lockable<T: Unlockable<Self>>: Sized {
-    fn lock(&self, key: &SecretKey) -> Result<T, PasswordManagerError>;
-}
-
-pub trait Unlockable<T: Lockable<Self>>: Sized {
-    fn unlock(&self, key: &SecretKey) -> Result<T, PasswordManagerError>;
-}
+use crate::error::PasswordManagerError;
+use chacha20poly1305::aead::{Aead, NewAead, Payload};
+use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
+use constant_time_eq::constant_time_eq;
+use crate::data::traits::{Lockable, Unlockable};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserDataLocked {
@@ -162,18 +155,24 @@ impl UserDataUnlocked {
     ) -> Result<(Self, SecretKey), PasswordManagerError> {
         let (salt, salt_buf) = generate_salt();
         let master_key = generate_master_key(new_password, &salt)?;
-        let password_key = generate_password_key();
-        let (sharing_private_key, sharing_public_key) = generate_sharing_key();
-        let (signing_private_key, signing_public_key) = generate_signing_key();
-        let private_data = self.private.change_key(password_key, sharing_private_key, signing_private_key)?;
-        let public_data = PublicData::new(
-            salt_buf,
-            compute_hash(&master_key),
-        );
-        let identity = Identity::new(&self.identity.username,
-                                     sharing_public_key,
-                                     signing_public_key);
 
-        Ok((UserDataUnlocked::new(public_data, private_data, identity), master_key))
+        let (password_key, (sharing_private_key, sharing_public_key), (signing_private_key, signing_public_key)) = generate_keys();
+
+        let public_data = PublicData::new(salt_buf, compute_hash(&master_key));
+        let identity = Identity::new(
+            &self.identity.username,
+            sharing_public_key,
+            signing_public_key,
+        );
+
+        let private_data =
+            self.private
+                .change_key(password_key, sharing_private_key, signing_private_key)?;
+
+
+        Ok((
+            UserDataUnlocked::new(public_data, private_data, identity),
+            master_key,
+        ))
     }
 }

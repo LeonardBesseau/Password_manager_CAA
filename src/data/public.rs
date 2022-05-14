@@ -1,5 +1,5 @@
+use crate::crypto::Salt;
 use serde::{Deserialize, Serialize};
-use crate::crypto::{Salt};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublicData {
@@ -10,9 +10,6 @@ pub struct PublicData {
 
 impl PublicData {
     pub fn new(salt: Salt, hash: String) -> Self {
-        PublicData {
-            salt,
-            hash,
-        }
+        PublicData { salt, hash }
     }
 }

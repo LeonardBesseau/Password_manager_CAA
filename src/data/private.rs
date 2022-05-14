@@ -1,12 +1,12 @@
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-use serde::de::{MapAccess, SeqAccess, Visitor};
-use std::fmt;
-use secrecy::ExposeSecret;
-use serde::ser::SerializeStruct;
 use crate::crypto::SecretKey;
 use crate::data::password::PasswordEntryLocked;
-use crate::data::user::{Lockable, Unlockable};
 use crate::error::PasswordManagerError;
+use secrecy::ExposeSecret;
+use serde::de::{MapAccess, SeqAccess, Visitor};
+use serde::ser::SerializeStruct;
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
+use crate::data::traits::{Lockable, Unlockable};
 
 pub struct PrivateData {
     pub(crate) password_key: SecretKey,
@@ -144,7 +144,7 @@ impl<'de> Deserialize<'de> for PrivateData {
                                 return Err(de::Error::duplicate_field("sharing_private_key"));
                             }
                             sharing_private_key = Some(map.next_value()?);
-                        },
+                        }
                         Field::SignaturePrivateKey => {
                             if signature_private_key.is_some() {
                                 return Err(de::Error::duplicate_field("signature_private_key"));
@@ -161,10 +161,10 @@ impl<'de> Deserialize<'de> for PrivateData {
                 }
                 let password_key =
                     password_key.ok_or_else(|| de::Error::missing_field("password_key"))?;
-                let sharing_private_key =
-                    sharing_private_key.ok_or_else(|| de::Error::missing_field("sharing_private_key"))?;
-                let signature_private_key =
-                    signature_private_key.ok_or_else(|| de::Error::missing_field("signature_private_key"))?;
+                let sharing_private_key = sharing_private_key
+                    .ok_or_else(|| de::Error::missing_field("sharing_private_key"))?;
+                let signature_private_key = signature_private_key
+                    .ok_or_else(|| de::Error::missing_field("signature_private_key"))?;
                 let passwords = passwords.ok_or_else(|| de::Error::missing_field("passwords"))?;
                 Ok(PrivateData {
                     password_key,
@@ -174,7 +174,12 @@ impl<'de> Deserialize<'de> for PrivateData {
                 })
             }
         }
-        const FIELDS: &'static [&'static str] = &["password_key", "sharing_private_key", "signature_private_key","passwords"];
+        const FIELDS: &'static [&'static str] = &[
+            "password_key",
+            "sharing_private_key",
+            "signature_private_key",
+            "passwords",
+        ];
         deserializer.deserialize_struct("PrivateData", FIELDS, PrivateDataVisitor)
     }
 }

@@ -12,7 +12,7 @@ use read_input::prelude::*;
 use std::error::Error;
 
 fn secure_mode(path: &str) -> Result<(), Box<dyn Error>> {
-    let (user_file, master_key) = match login(path)? {
+    let (user_data, master_key) = match login(path)? {
         (LoginResult::EarlyAbort, _) => {
             return Ok(());
         }
@@ -25,7 +25,7 @@ fn secure_mode(path: &str) -> Result<(), Box<dyn Error>> {
         }
         (LoginResult::Success, Some(t)) => t,
     };
-    cli::secure_menu::menu(path, user_file, master_key)
+    cli::secure_menu::menu(path, user_data, master_key)
 }
 
 const PATH: &str = "files";

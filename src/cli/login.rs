@@ -1,10 +1,11 @@
 use crate::cli::login::LoginResult::{EarlyAbort, Invalid, Success};
 use crate::crypto::{generate_master_key, SecretKey};
-use crate::data::user::{Unlockable, UserDataLocked, UserDataUnlocked};
+use crate::data::user::{UserDataLocked, UserDataUnlocked};
 use crate::error::PasswordManagerError;
-use crate::file::{read_shared_file, read_user_file, remove_shared_file, user_file_exists};
+use crate::file::{read_shared_data, read_user_data, remove_shared_data, user_data_exists};
 use crate::input::{ask_for_password, ask_for_username};
 use argon2::password_hash::SaltString;
+use crate::data::traits::Unlockable;
 
 pub enum LoginResult {
     EarlyAbort,
@@ -12,16 +13,19 @@ pub enum LoginResult {
     Success,
 }
 
-fn convert_shared_password(path: &str, user_file: &mut UserDataUnlocked) -> Result<(), PasswordManagerError> {
-    let entries = read_shared_file(
+fn convert_shared_password(
+    path: &str,
+    user_data: &mut UserDataUnlocked,
+) -> Result<(), PasswordManagerError> {
+    let entries = read_shared_data(
         path,
-        &user_file.identity.username,
-        user_file.get_private_sharing_key(),
+        &user_data.identity.username,
+        user_data.get_private_sharing_key(),
     )?;
     for entry in entries {
         let password = &entry.password;
         let sender_username = &password.shared_by.clone().unwrap();
-        let sender_info = read_user_file(path, &sender_username.as_str())?;
+        let sender_info = read_user_data(path, &sender_username.as_str())?;
         if !sender_info.verify_identity() {
             eprint!(
                 "Identity for {} was found invalid. Skipping",
@@ -29,21 +33,24 @@ fn convert_shared_password(path: &str, user_file: &mut UserDataUnlocked) -> Resu
             );
             continue;
         }
-        if !entry.verify(&user_file.identity.username, &sender_info.identity.signing_public_key)? {
+        if !entry.verify(
+            &user_data.identity.username,
+            &sender_info.identity.signing_public_key,
+        )? {
             eprint!(
                 "Invalid signature for password supposedly shared by {}. Skipping",
                 sender_username
             );
             continue;
         }
-        user_file.add_password(
+        user_data.add_password(
             entry.password.site.as_str(),
             entry.password.username.as_str(),
             entry.password.password,
             entry.password.shared_by,
         )?;
     }
-    remove_shared_file(path, &user_file.identity.username)?;
+    remove_shared_data(path, &user_data.identity.username)?;
     Ok(())
 }
 
@@ -59,10 +66,10 @@ pub fn login(
     username = user_input.unwrap();
 
     // TODO this is vulnerable to a timing attack (disk access and comparison is constant only if both operand are the same size)
-    let user_file = if !user_file_exists(path, username.as_str()) {
+    let user_file = if !user_data_exists(path, username.as_str()) {
         UserDataLocked::fake()
     } else {
-        read_user_file(path, username.as_str())?
+        read_user_data(path, username.as_str())?
     };
 
     let password = ask_for_password();

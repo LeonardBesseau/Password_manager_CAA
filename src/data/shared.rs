@@ -1,9 +1,8 @@
 use crate::crypto::{sign_message, verify_message};
+use crate::data::password::PasswordEntryUnlocked;
 use crate::error::PasswordManagerError;
 use ed25519_dalek::Signature;
-use serde::{ Deserialize, Serialize};
-use crate::data::password::{PasswordEntryUnlocked};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct SharedPassword {
@@ -24,7 +23,11 @@ impl SharedPassword {
         })
     }
 
-    pub fn verify(&self, username: &str, public_key: &ed25519_dalek::PublicKey) -> Result<bool, PasswordManagerError> {
+    pub fn verify(
+        &self,
+        username: &str,
+        public_key: &ed25519_dalek::PublicKey,
+    ) -> Result<bool, PasswordManagerError> {
         verify_message(username, &self.signature, public_key)
     }
 }

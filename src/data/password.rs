@@ -1,13 +1,13 @@
-use std::fmt;
-use crate::crypto::{generate_nonce, EncryptedData, Nonce, SecretKey};
-use crate::data::user::{Lockable, Unlockable};
+use crate::crypto::{EncryptedData, generate_nonce, Nonce, SecretKey};
 use crate::error::PasswordManagerError;
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use secrecy::{ExposeSecret, SecretString, Zeroize};
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
+use crate::data::traits::{Lockable, Unlockable};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Password {
@@ -146,8 +146,8 @@ impl Zeroize for PasswordEntryLocked {
 
 impl Serialize for PasswordEntryUnlocked {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         let mut state = serializer.serialize_struct("PasswordEntryUnlocked", 4)?;
         state.serialize_field("site", &self.site)?;
@@ -160,8 +160,8 @@ impl Serialize for PasswordEntryUnlocked {
 
 impl<'de> Deserialize<'de> for PasswordEntryUnlocked {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         enum Field {
             Site,
@@ -172,8 +172,8 @@ impl<'de> Deserialize<'de> for PasswordEntryUnlocked {
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
-                where
-                    D: Deserializer<'de>,
+            where
+                D: Deserializer<'de>,
             {
                 struct FieldVisitor;
 
@@ -185,8 +185,8 @@ impl<'de> Deserialize<'de> for PasswordEntryUnlocked {
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<Field, E>
-                        where
-                            E: de::Error,
+                    where
+                        E: de::Error,
                     {
                         match value {
                             "site" => Ok(Field::Site),
@@ -212,8 +212,8 @@ impl<'de> Deserialize<'de> for PasswordEntryUnlocked {
             }
 
             fn visit_seq<V>(self, mut seq: V) -> Result<PasswordEntryUnlocked, V::Error>
-                where
-                    V: SeqAccess<'de>,
+            where
+                V: SeqAccess<'de>,
             {
                 let site = seq
                     .next_element()?
@@ -237,8 +237,8 @@ impl<'de> Deserialize<'de> for PasswordEntryUnlocked {
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<PasswordEntryUnlocked, V::Error>
-                where
-                    V: MapAccess<'de>,
+            where
+                V: MapAccess<'de>,
             {
                 let mut site = None;
                 let mut username = None;
@@ -273,12 +273,9 @@ impl<'de> Deserialize<'de> for PasswordEntryUnlocked {
                         }
                     }
                 }
-                let site =
-                    site.ok_or_else(|| de::Error::missing_field("site"))?;
-                let username =
-                    username.ok_or_else(|| de::Error::missing_field("username"))?;
-                let password =
-                    password.ok_or_else(|| de::Error::missing_field("password"))?;
+                let site = site.ok_or_else(|| de::Error::missing_field("site"))?;
+                let username = username.ok_or_else(|| de::Error::missing_field("username"))?;
+                let password = password.ok_or_else(|| de::Error::missing_field("password"))?;
                 let shared_by = shared_by.ok_or_else(|| de::Error::missing_field("shared_by"))?;
                 Ok(PasswordEntryUnlocked {
                     site,

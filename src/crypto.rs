@@ -3,8 +3,7 @@ use argon2::{
     password_hash::{PasswordHasher, SaltString},
     Algorithm, Argon2, ParamsBuilder, Version,
 };
-use ecies_ed25519::{PublicKey as SharingKeyPublic, SecretKey as SharingKeyPrivate};
-use ed25519_dalek::{PublicKey as SigningKeyPublic, SecretKey as SigningKeyPrivate, Keypair, Signature, Signer, Verifier};
+use ed25519_dalek::{Keypair, Signature, Signer, Verifier};
 use hkdf::Hkdf;
 use rand_core::{OsRng, RngCore};
 use secrecy::{ExposeSecret, SecretString, SecretVec, Zeroize};
@@ -14,6 +13,10 @@ pub type EncryptedData = Vec<u8>;
 pub type SecretKey = SecretVec<u8>;
 pub type Nonce = [u8; 24];
 pub type Salt = [u8; 16];
+pub type SharingKeyPublic = ecies_ed25519::PublicKey;
+pub type SharingKeyPrivate = ecies_ed25519::SecretKey;
+pub type SigningKeyPublic = ed25519_dalek::PublicKey;
+pub type SigningKeyPrivate = ed25519_dalek::SecretKey;
 
 pub fn generate_master_key(
     master_password: SecretString,
@@ -72,26 +75,40 @@ pub fn generate_nonce() -> Nonce {
     nonce
 }
 
-pub fn share_message(receiver_key: &SharingKeyPublic, message: &[u8]) -> Result<Vec<u8>, PasswordManagerError> {
+pub fn share_message(
+    receiver_key: &SharingKeyPublic,
+    message: &[u8],
+) -> Result<Vec<u8>, PasswordManagerError> {
     let mut csprng = rand_7::thread_rng();
-    match ecies_ed25519::encrypt(
-        receiver_key,
-        message,
-        &mut csprng,
-    ) {
-        Ok(data) => { Ok(data) }
-        Err(_) => { Err(PasswordManagerError::Security) }
+    match ecies_ed25519::encrypt(receiver_key, message, &mut csprng) {
+        Ok(data) => Ok(data),
+        Err(_) => Err(PasswordManagerError::Security),
     }
 }
 
-pub fn sign_message(username: &str, private_key: &SigningKeyPrivate, public_key: &SigningKeyPublic) -> Result<Signature, PasswordManagerError> {
-    let mut a = Vec::new();
+pub fn sign_message(
+    username: &str,
+    private_key: &SigningKeyPrivate,
+    public_key: &SigningKeyPublic,
+) -> Result<Signature, PasswordManagerError> {
+    let mut a = Vec::with_capacity(32 + 32); // private and public key as bytes both takes 32 bytes
     a.extend_from_slice(private_key.as_bytes());
     a.extend_from_slice(public_key.as_bytes());
     let keypair = Keypair::from_bytes(a.as_slice())?;
     Ok(keypair.sign(username.as_bytes()))
 }
 
-pub fn verify_message(username: &str, signature: &Signature, public_key: &SigningKeyPublic) -> Result<bool, PasswordManagerError> {
+pub fn verify_message(
+    username: &str,
+    signature: &Signature,
+    public_key: &SigningKeyPublic,
+) -> Result<bool, PasswordManagerError> {
     Ok(public_key.verify(username.as_bytes(), signature).is_ok())
+}
+
+pub fn generate_keys() -> (SecretKey, (SharingKeyPrivate, SharingKeyPublic), (SigningKeyPrivate, SigningKeyPublic)){
+    let password_key = generate_password_key();
+    let sharing_key_pair = generate_sharing_key();
+    let signing_key_pair = generate_signing_key();
+    (password_key, sharing_key_pair, signing_key_pair)
 }

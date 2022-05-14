@@ -13,10 +13,10 @@ use std::error::Error;
 
 pub(crate) fn menu(
     path: &str,
-    mut user_file: UserDataUnlocked,
+    mut user_data: UserDataUnlocked,
     master_key: SecretKey,
 ) -> Result<(), Box<dyn Error>> {
-    println!("Welcome {} !", user_file.identity.username);
+    println!("Welcome {} !", user_data.identity.username);
     loop {
         match input::<i32>()
             .repeat_msg(
@@ -34,16 +34,16 @@ pub(crate) fn menu(
             .get()
         {
             0 => {
-                println!("Goodbye {}!", user_file.identity.username);
+                println!("Goodbye {}!", user_data.identity.username);
                 return Ok(());
             }
-            1 => add_password(path, &mut user_file, &master_key)?,
-            2 => show_password(&user_file)?,
-            3 => share_password(path, &user_file)?,
+            1 => add_password(path, &mut user_data, &master_key)?,
+            2 => show_password(&user_data)?,
+            3 => share_password(path, &user_data)?,
             4 => verify_password_strength(),
             5 => generate_password::menu(),
             6 => {
-                change_master_password(path, user_file)?;
+                change_master_password(path, user_data)?;
                 println!("Please relogin to continue");
                 return Ok(());
             }

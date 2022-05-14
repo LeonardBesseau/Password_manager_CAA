@@ -2,8 +2,8 @@ use crate::data::user::UserDataUnlocked;
 use read_input::prelude::input;
 use read_input::{InputBuild, InputConstraints};
 
-pub fn select_password_entry(user_file: &UserDataUnlocked) -> Option<usize> {
-    let entries = user_file.get_password_list();
+pub fn select_password_entry(user_data: &UserDataUnlocked) -> Option<usize> {
+    let entries = user_data.get_password_list();
     for (i, entry) in entries.iter().enumerate() {
         print!("{} - {}", i + 1, &entry.site);
         if entry.shared_by.is_some() {

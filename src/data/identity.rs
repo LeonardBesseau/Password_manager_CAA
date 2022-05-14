@@ -1,27 +1,31 @@
-use std::str::FromStr;
+use crate::ca::{sign_identity, verify_identity};
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
-use crate::ca::{sign_public_key, verify_public_key};
+use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Identity{
+pub struct Identity {
     pub username: String,
     pub sharing_public_key: ecies_ed25519::PublicKey,
     pub signing_public_key: ed25519_dalek::PublicKey,
     pub signature: Signature,
 }
 
-impl Identity{
-    pub fn new(username: &String, sharing_public_key: ecies_ed25519::PublicKey, signature_public_key: ed25519_dalek::PublicKey) -> Self{
+impl Identity {
+    pub fn new(
+        username: &String,
+        sharing_public_key: ecies_ed25519::PublicKey,
+        signature_public_key: ed25519_dalek::PublicKey,
+    ) -> Self {
         Identity {
             username: username.clone(),
             sharing_public_key,
             signing_public_key: signature_public_key,
-            signature: sign_public_key(username,  &sharing_public_key, &signature_public_key)
+            signature: sign_identity(username, &sharing_public_key, &signature_public_key),
         }
     }
 
-    pub fn fake() -> Self{
+    pub fn fake() -> Self {
         Identity{
             username: "".parse().unwrap(),
             sharing_public_key: Default::default(),
@@ -31,8 +35,8 @@ impl Identity{
         }
     }
 
-    pub fn verify_identity(&self) -> bool{
-        verify_public_key(
+    pub fn verify_identity(&self) -> bool {
+        verify_identity(
             self.username.as_str(),
             &self.sharing_public_key,
             &self.signing_public_key,

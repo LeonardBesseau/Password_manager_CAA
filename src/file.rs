@@ -1,13 +1,14 @@
 use crate::crypto::SecretKey;
-use crate::data::user::{Lockable, UserDataLocked, UserDataUnlocked};
-use crate::error::PasswordManagerError;
 use crate::data::shared::SharedPassword;
+use crate::data::user::{UserDataLocked, UserDataUnlocked};
+use crate::error::PasswordManagerError;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs, io};
 use uuid::Uuid;
+use crate::data::traits::Lockable;
 
 pub const DATA_FILE_NAME: &str = "data";
 pub const SHARED_FILE_NAME: &str = "shared";
@@ -26,17 +27,17 @@ fn get_user_shared_filepath(path: &str, username: &str) -> String {
     format!("{}/{}/{}", path, uuid, SHARED_FILE_NAME)
 }
 
-pub(crate) fn create_user_directory(path: &str, username: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn setup_user_data(path: &str, username: &str) -> Result<(), Box<dyn Error>> {
     let uuid = get_uuid(username);
     Ok(fs::create_dir_all(format!("{}/{}/", path, uuid).as_str())?)
 }
 
-pub(crate) fn user_file_exists(path: &str, username: &str) -> bool {
+pub(crate) fn user_data_exists(path: &str, username: &str) -> bool {
     let uuid = get_uuid(username);
     Path::new(format!("{}/{}/{}", path, uuid, DATA_FILE_NAME).as_str()).exists()
 }
 
-pub(crate) fn write_user_file(
+fn write_user_file(
     path: &str,
     username: &str,
     data: UserDataLocked,
@@ -47,7 +48,7 @@ pub(crate) fn write_user_file(
     Ok(())
 }
 
-pub(crate) fn read_user_file(
+pub(crate) fn read_user_data(
     path: &str,
     username: &str,
 ) -> Result<UserDataLocked, PasswordManagerError> {
@@ -56,7 +57,7 @@ pub(crate) fn read_user_file(
     Ok(data)
 }
 
-pub(crate) fn write_shared_file(
+pub(crate) fn write_shared_data(
     path: &str,
     username: &str,
     data: Vec<u8>,
@@ -84,7 +85,7 @@ pub(crate) fn write_shared_file(
     Ok(())
 }
 
-pub(crate) fn read_shared_file(
+pub(crate) fn read_shared_data(
     path: &str,
     username: &str,
     key: &ecies_ed25519::SecretKey,
@@ -110,7 +111,7 @@ pub(crate) fn read_shared_file(
     Ok(output)
 }
 
-pub(crate) fn remove_shared_file(path: &str, username: &str) -> Result<(), PasswordManagerError> {
+pub(crate) fn remove_shared_data(path: &str, username: &str) -> Result<(), PasswordManagerError> {
     let result = fs::remove_file(get_user_shared_filepath(path, username));
     if result.is_err() {
         let error = result.err().unwrap();
@@ -121,12 +122,12 @@ pub(crate) fn remove_shared_file(path: &str, username: &str) -> Result<(), Passw
     Ok(())
 }
 
-pub(crate) fn save_user_file(
+pub(crate) fn save_user_data(
     path: &str,
-    user_file: &UserDataUnlocked,
+    user_data: &UserDataUnlocked,
     master_key: &SecretKey,
 ) -> Result<(), Box<dyn Error>> {
-    let user_file = user_file.lock(&master_key)?;
-    let username = user_file.identity.username.clone();
-    write_user_file(path, username.as_str(), user_file)
+    let user_data = user_data.lock(&master_key)?;
+    let username = user_data.identity.username.clone();
+    write_user_file(path, username.as_str(), user_data)
 }
