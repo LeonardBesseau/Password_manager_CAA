@@ -32,7 +32,7 @@ pub fn share_password(
         }
     }
     let receiver_user_data = read_user_data(path, &username)?;
-    if !receiver_user_data.verify_identity() {
+    if !receiver_user_data.verify_identity(&username) {
         eprint!(
             "Error public key for user {} was tampered with ! Aborting",
             receiver_user_data.identity.username

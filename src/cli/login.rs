@@ -26,7 +26,7 @@ fn convert_shared_password(
         let password = &entry.password;
         let sender_username = &password.shared_by.clone().unwrap();
         let sender_info = read_user_data(path, &sender_username.as_str())?;
-        if !sender_info.verify_identity() {
+        if !sender_info.verify_identity(&sender_username) {
             eprint!(
                 "Identity for {} was found invalid. Skipping",
                 sender_username
@@ -83,7 +83,7 @@ pub fn login(
     if !user_file.verify_master_key(&master_key) {
         return Ok((Invalid, None));
     }
-    if !user_file.verify_identity() {
+    if !user_file.verify_identity(&username) {
         eprint!("Tampering Detected ! Aborting.");
         return Err(PasswordManagerError::Security);
     }

@@ -91,10 +91,10 @@ pub fn sign_message(
     private_key: &SigningKeyPrivate,
     public_key: &SigningKeyPublic,
 ) -> Result<Signature, PasswordManagerError> {
-    let mut a = Vec::with_capacity(32 + 32); // private and public key as bytes both takes 32 bytes
-    a.extend_from_slice(private_key.as_bytes());
-    a.extend_from_slice(public_key.as_bytes());
-    let keypair = Keypair::from_bytes(a.as_slice())?;
+    let mut keypair = Vec::with_capacity(32 + 32); // private and public key as bytes both takes 32 bytes
+    keypair.extend_from_slice(private_key.as_bytes());
+    keypair.extend_from_slice(public_key.as_bytes());
+    let keypair = Keypair::from_bytes(keypair.as_slice())?;
     Ok(keypair.sign(username.as_bytes()))
 }
 

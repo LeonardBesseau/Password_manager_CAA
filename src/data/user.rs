@@ -73,8 +73,8 @@ impl UserDataLocked {
         )
     }
 
-    pub fn verify_identity(&self) -> bool {
-        self.identity.verify_identity()
+    pub fn verify_identity(&self, expected_username: &str) -> bool {
+        self.identity.verify_identity(expected_username)
     }
 }
 
@@ -104,7 +104,26 @@ impl Lockable<UserDataLocked> for UserDataUnlocked {
 }
 
 impl UserDataUnlocked {
-    pub fn new(public_data: PublicData, private_data: PrivateData, identity: Identity) -> Self {
+    pub fn new(username: &String, salt_buf: [u8; 16], hash: String) -> UserDataUnlocked {
+        let (password_key, (sharing_private_key, sharing_public_key), (signing_private_key, signing_public_key)) = generate_keys();
+
+        let public_data = PublicData::new(salt_buf, hash);
+        let identity = Identity::new(&username, sharing_public_key, signing_public_key);
+
+        let private_data = PrivateData::new(
+            password_key,
+            sharing_private_key,
+            signing_private_key,
+            vec![],
+        );
+
+        // encrypt password key
+        let user_data = UserDataUnlocked::create(public_data, private_data, identity);
+        user_data
+    }
+
+
+     fn create(public_data: PublicData, private_data: PrivateData, identity: Identity) -> Self {
         UserDataUnlocked {
             public: public_data,
             identity,
@@ -171,8 +190,39 @@ impl UserDataUnlocked {
 
 
         Ok((
-            UserDataUnlocked::new(public_data, private_data, identity),
+            UserDataUnlocked::create(public_data, private_data, identity),
             master_key,
         ))
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use secrecy::{ExposeSecret, SecretString, SecretVec};
+    use crate::crypto::{compute_hash, generate_keys, generate_master_key, generate_salt, SecretKey};
+    use crate::data::traits::Lockable;
+    use crate::data::user::UserDataUnlocked;
+
+
+
+    fn generate_user_file(name: &str) -> (UserDataUnlocked, SecretKey){
+        let username = name.to_string();
+        let password = name.to_string();
+        let salt_buf = [0u8;16];
+        let master_key = SecretKey::from(vec![46u8, 179, 37, 37, 85, 30, 62, 150, 221, 172, 86, 131, 63, 41, 40, 44, 108, 142, 93, 231, 74, 94, 218, 165, 85, 112, 225, 124, 162, 34, 114, 173]);
+        let hash = compute_hash(&master_key);
+        (UserDataUnlocked::new(&username, salt_buf, hash), master_key)
+    }
+
+
+    #[test]
+    fn swapping_identity_is_detected(){
+        let  (mut user1, master_key_1)  = generate_user_file("A");
+        let  ( user2, _) = generate_user_file("B");
+
+        user1.identity = user2.identity;
+        let user1 = user1.lock(&master_key_1).unwrap();
+        assert_eq!(user1.verify_identity("A"), false);
+    }
+
 }
