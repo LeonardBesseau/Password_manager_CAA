@@ -198,20 +198,27 @@ impl UserDataUnlocked {
 
 #[cfg(test)]
 mod tests {
-    use secrecy::{ExposeSecret, SecretString, SecretVec};
-    use crate::crypto::{compute_hash, generate_keys, generate_master_key, generate_salt, SecretKey};
-    use crate::data::traits::Lockable;
+    use crate::crypto::{compute_hash, SecretKey};
+    use crate::data::traits::{Lockable, Unlockable};
     use crate::data::user::UserDataUnlocked;
-
+    use crate::error::PasswordManagerError;
 
 
     fn generate_user_file(name: &str) -> (UserDataUnlocked, SecretKey){
         let username = name.to_string();
-        let password = name.to_string();
         let salt_buf = [0u8;16];
-        let master_key = SecretKey::from(vec![46u8, 179, 37, 37, 85, 30, 62, 150, 221, 172, 86, 131, 63, 41, 40, 44, 108, 142, 93, 231, 74, 94, 218, 165, 85, 112, 225, 124, 162, 34, 114, 173]);
+        // Password is test
+        let master_key = SecretKey::from(vec![26, 113, 79, 169, 98, 182, 100, 22, 84, 227, 193, 60, 141, 123, 234, 191, 94, 86, 182, 249, 138, 120, 222, 240, 160, 197, 40, 217, 123, 39, 155, 27]);
         let hash = compute_hash(&master_key);
         (UserDataUnlocked::new(&username, salt_buf, hash), master_key)
+    }
+
+    #[test]
+    fn no_tampering_works(){
+        let  ( user1, master_key_1)  = generate_user_file("A");
+        let user1 = user1.lock(&master_key_1).unwrap();
+        let res = user1.unlock(&master_key_1);
+        assert!(res.is_ok());
     }
 
 
@@ -223,6 +230,69 @@ mod tests {
         user1.identity = user2.identity;
         let user1 = user1.lock(&master_key_1).unwrap();
         assert_eq!(user1.verify_identity("A"), false);
+    }
+
+    #[test]
+    fn tampering_with_encrypted_data_is_detected(){
+        let  ( user1, master_key_1)  = generate_user_file("A");
+
+        let mut user1 = user1.lock(&master_key_1).unwrap();
+        user1.private[10] ^= 0xFF;
+        user1.private[20] ^= 0xFF;
+        user1.private[30] ^= 0xFF;
+        let res = user1.unlock(&master_key_1);
+        assert!(res.is_err());
+        let res = res.err().unwrap();
+        assert!(match res{
+            PasswordManagerError::Security => true,
+            _ => false
+        });
+    }
+
+    #[test]
+    fn tampering_with_nonce_is_detected(){
+        let  ( user1, master_key_1)  = generate_user_file("A");
+
+        let mut user1 = user1.lock(&master_key_1).unwrap();
+        user1.nonce[1] ^= 0xFF;
+        user1.nonce[10] ^= 0xFF;
+        let res = user1.unlock(&master_key_1);
+        assert!(res.is_err());
+        let res = res.err().unwrap();
+        assert!(match res{
+            PasswordManagerError::Security => true,
+            _ => false
+        });
+    }
+
+    #[test]
+    fn tampering_with_hash_is_detected(){
+        let  ( user1, master_key_1)  = generate_user_file("A");
+
+        let mut user1 = user1.lock(&master_key_1).unwrap();
+        user1.public.hash = "modified".to_string();
+        let res = user1.unlock(&master_key_1);
+        assert!(res.is_err());
+        let res = res.err().unwrap();
+        assert!(match res{
+            PasswordManagerError::Security => true,
+            _ => false
+        });
+    }
+
+    #[test]
+    fn tampering_with_salt_is_detected(){
+        let  ( user1, master_key_1)  = generate_user_file("A");
+
+        let mut user1 = user1.lock(&master_key_1).unwrap();
+        user1.public.salt[10] ^= 0xFF;
+        let res = user1.unlock(&master_key_1);
+        assert!(res.is_err());
+        let res = res.err().unwrap();
+        assert!(match res{
+            PasswordManagerError::Security => true,
+            _ => false
+        });
     }
 
 }
