@@ -27,7 +27,7 @@ fn convert_shared_password(
         let sender_username = &password.shared_by.clone().unwrap();
         let sender_info = read_user_data(path, &sender_username.as_str())?;
         if !sender_info.verify_identity(&sender_username) {
-            eprint!(
+            eprintln!(
                 "Identity for {} was found invalid. Skipping",
                 sender_username
             );
@@ -37,7 +37,7 @@ fn convert_shared_password(
             &user_data.identity.username,
             &sender_info.identity.signing_public_key,
         )? {
-            eprint!(
+            eprintln!(
                 "Invalid signature for password supposedly shared by {}. Skipping",
                 sender_username
             );
