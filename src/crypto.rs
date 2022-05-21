@@ -45,8 +45,7 @@ pub fn generate_salt() -> (SaltString, [u8; 16]) {
 }
 
 pub fn generate_sharing_key() -> (SharingKeyPrivate, SharingKeyPublic) {
-    let mut csprng = rand_7::thread_rng();
-    ecies_ed25519::generate_keypair(&mut csprng)
+    ecies_ed25519::generate_keypair(&mut rand_7::thread_rng())
 }
 
 pub fn generate_signing_key() -> (SigningKeyPrivate, SigningKeyPublic) {

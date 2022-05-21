@@ -54,6 +54,14 @@ fn convert_shared_password(
     Ok(())
 }
 
+fn get_user_data(path: &str, username: &str) -> Result<UserDataLocked, PasswordManagerError>{
+    if !user_data_exists(path, username) {
+        Ok(UserDataLocked::fake())
+    } else {
+        read_user_data(path, username)
+    }
+}
+
 pub fn login(
     path: &str,
 ) -> Result<(LoginResult, Option<(UserDataUnlocked, SecretKey)>), PasswordManagerError> {
@@ -62,15 +70,10 @@ pub fn login(
     if user_input.is_none() {
         return Ok((EarlyAbort, None));
     }
-
     username = user_input.unwrap();
 
-    // TODO this is vulnerable to a timing attack (disk access and comparison is constant only if both operand are the same size)
-    let user_file = if !user_data_exists(path, username.as_str()) {
-        UserDataLocked::fake()
-    } else {
-        read_user_data(path, username.as_str())?
-    };
+    // This is vulnerable to a timing attack (disk access and comparison is constant only if both operand are the same size)
+    let user_file = get_user_data(path, username.as_str())?;
 
     let password = ask_for_password();
     if password.is_none() {
@@ -79,7 +82,6 @@ pub fn login(
 
     let salt = SaltString::b64_encode(&user_file.public.salt)?;
     let master_key = generate_master_key(password.unwrap(), &salt)?;
-
     if !user_file.verify_master_key(&master_key) {
         return Ok((Invalid, None));
     }

@@ -1,4 +1,4 @@
-use crate::crypto::{compute_hash, generate_keys, generate_master_key, generate_salt};
+use crate::crypto::{compute_hash, generate_master_key, generate_salt};
 use crate::file::save_user_data;
 use crate::file::{setup_user_data, user_data_exists};
 use crate::input::{ask_for_password, ask_for_username};

@@ -11,7 +11,75 @@ ___
 - Share a password with another user
 
 # How to use
-TODO
+Clone the repository and compile the program. You need write-and read-permission for the current folder.
+Here is a quick demo of the program:
+```
+Welcome to the very secure password manager !
+Please select one of the following to continue
+0 - Exit
+1 - Login
+2 - Create new account
+1
+Please enter your username (Enter with no input to return to previous screen): exemple
+Please enter your password (Enter with no input to return to previous screen): SuperSecretPassword
+Welcome exemple !
+Please select one of the following to continue
+0 - Exit
+1 - Add password
+2 - Show password
+3 - Share password
+4 - Verify password strength
+5 - Generate password
+6 - Change master password
+2
+1 - my super site
+2 - google
+Please select a site to display its password or 0 to return to the previous screen
+1
+Site: my super site
+Username: username
+Password: abcdefghijklmnop
+Please select one of the following to continue
+0 - Exit
+1 - Add password
+2 - Show password
+3 - Share password
+4 - Verify password strength
+5 - Generate password
+6 - Change master password
+3
+1 - my super site
+2 - google
+Please select a site to display its password or 0 to return to the previous screen
+2
+Enter the username to share the password with (Enter with no input to return to previous screen): do_not_exist
+The selected user does not exist !
+Enter the username to share the password with (Enter with no input to return to previous screen):Another exemple
+Password shared !!! 
+```
+```
+Please select one of the following to continue
+0 - Exit
+1 - Login
+2 - Create new account
+1
+Please enter your username (Enter with no input to return to previous screen): Another exemple
+Please enter your password (Enter with no input to return to previous screen): This Is a secret
+Welcome Another exemple !
+Please select one of the following to continue
+0 - Exit
+1 - Add password
+2 - Show password
+3 - Share password
+4 - Verify password strength
+5 - Generate password
+6 - Change master password
+2
+1 - google | Shared by exemple
+2 - test
+3 - a
+Please select a site to display its password or 0 to return to the previous screen
+```
 ___
 # Lab objectives
 This program is a multi-user password manager realized for the Advanced Applied Cryptography (CAA) at HEIG-VD.
@@ -41,7 +109,7 @@ Our password manager can be in two different states:
 
 ### Password sharing
 A user should be able to share his password with another user of the software. For this, he
-simply has to type (or select) an other username and a label and the password should be added (in a
+simply has to type (or select) another username and a label and the password should be added (in a
 secure way) in the other user’s account. Note that while sharing, the password should remain secure
 and not leak or stay in clear somewhere.
 
