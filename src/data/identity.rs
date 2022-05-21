@@ -1,8 +1,7 @@
-
+use crate::identity_autority::{sign_identity, verify_identity};
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use crate::identity_autority::{sign_identity, verify_identity};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Identity {
@@ -40,23 +39,23 @@ impl Identity {
     ///
     ///
     pub fn verify_identity(&self, expected_username: &str) -> bool {
-        expected_username == self.username && verify_identity(
-            self.username.as_str(),
-            &self.sharing_public_key,
-            &self.signing_public_key,
-            &self.signature,
-        )
+        expected_username == self.username
+            && verify_identity(
+                self.username.as_str(),
+                &self.sharing_public_key,
+                &self.signing_public_key,
+                &self.signature,
+            )
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use ed25519_dalek::{Keypair, Signer};
     use crate::crypto::generate_keys;
     use crate::data::identity::Identity;
+    use ed25519_dalek::{Keypair, Signer};
 
-    fn generate_identity(username: &str) -> Identity{
+    fn generate_identity(username: &str) -> Identity {
         let username = username.to_string();
         let (_, share, sign) = generate_keys();
         Identity::new(&username, share.1, sign.1)

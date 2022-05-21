@@ -1,12 +1,12 @@
 use crate::crypto::SecretKey;
 use crate::data::password::PasswordEntryLocked;
+use crate::data::traits::{Lockable, Unlockable};
 use crate::error::PasswordManagerError;
 use secrecy::ExposeSecret;
 use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
-use crate::data::traits::{Lockable, Unlockable};
 
 pub struct PrivateData {
     pub(crate) password_key: SecretKey,

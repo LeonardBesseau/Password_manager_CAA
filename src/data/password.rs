@@ -1,4 +1,5 @@
-use crate::crypto::{EncryptedData, generate_nonce, Nonce, SecretKey};
+use crate::crypto::{generate_nonce, EncryptedData, Nonce, SecretKey};
+use crate::data::traits::{Lockable, Unlockable};
 use crate::error::PasswordManagerError;
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
@@ -7,7 +8,6 @@ use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
-use crate::data::traits::{Lockable, Unlockable};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Password {

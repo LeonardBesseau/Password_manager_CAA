@@ -1,5 +1,6 @@
 use crate::crypto::SecretKey;
 use crate::data::shared::SharedPassword;
+use crate::data::traits::Lockable;
 use crate::data::user::{UserDataLocked, UserDataUnlocked};
 use crate::error::PasswordManagerError;
 use std::error::Error;
@@ -8,7 +9,6 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs, io};
 use uuid::Uuid;
-use crate::data::traits::Lockable;
 
 pub const DATA_FILE_NAME: &str = "data";
 pub const SHARED_FILE_NAME: &str = "shared";
@@ -37,11 +37,7 @@ pub(crate) fn user_data_exists(path: &str, username: &str) -> bool {
     Path::new(format!("{}/{}/{}", path, uuid, DATA_FILE_NAME).as_str()).exists()
 }
 
-fn write_user_file(
-    path: &str,
-    username: &str,
-    data: UserDataLocked,
-) -> Result<(), Box<dyn Error>> {
+fn write_user_file(path: &str, username: &str, data: UserDataLocked) -> Result<(), Box<dyn Error>> {
     let mut writer = BufWriter::new(File::create(get_user_filepath(path, username))?);
     bincode::serialize_into(&mut writer, &data)?;
     writer.flush()?;

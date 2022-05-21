@@ -1,11 +1,11 @@
 extern crate core;
 
-mod identity_autority;
 mod cli;
 mod crypto;
 mod data;
 mod error;
 mod file;
+mod identity_autority;
 mod input;
 
 use cli::login::{login, LoginResult};

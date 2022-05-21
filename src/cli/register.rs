@@ -1,8 +1,8 @@
 use crate::crypto::{compute_hash, generate_master_key, generate_salt};
+use crate::data::user::UserDataUnlocked;
 use crate::file::save_user_data;
 use crate::file::{setup_user_data, user_data_exists};
 use crate::input::{ask_for_password, ask_for_username};
-use crate::data::user::UserDataUnlocked;
 use std::error::Error;
 
 pub fn register(path: &str) -> Result<(), Box<dyn Error>> {
@@ -37,5 +37,3 @@ pub fn register(path: &str) -> Result<(), Box<dyn Error>> {
     let user_data = UserDataUnlocked::new(&username, salt_buf, hash);
     save_user_data(path, &user_data, &master_key)
 }
-
-

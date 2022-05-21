@@ -105,7 +105,11 @@ pub fn verify_message(
     Ok(public_key.verify(username.as_bytes(), signature).is_ok())
 }
 
-pub fn generate_keys() -> (SecretKey, (SharingKeyPrivate, SharingKeyPublic), (SigningKeyPrivate, SigningKeyPublic)){
+pub fn generate_keys() -> (
+    SecretKey,
+    (SharingKeyPrivate, SharingKeyPublic),
+    (SigningKeyPrivate, SigningKeyPublic),
+) {
     let password_key = generate_password_key();
     let sharing_key_pair = generate_sharing_key();
     let signing_key_pair = generate_signing_key();

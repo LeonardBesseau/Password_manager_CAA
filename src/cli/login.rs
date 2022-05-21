@@ -1,11 +1,11 @@
 use crate::cli::login::LoginResult::{EarlyAbort, Invalid, Success};
 use crate::crypto::{generate_master_key, SecretKey};
+use crate::data::traits::Unlockable;
 use crate::data::user::{UserDataLocked, UserDataUnlocked};
 use crate::error::PasswordManagerError;
 use crate::file::{read_shared_data, read_user_data, remove_shared_data, user_data_exists};
 use crate::input::{ask_for_password, ask_for_username};
 use argon2::password_hash::SaltString;
-use crate::data::traits::Unlockable;
 
 pub enum LoginResult {
     EarlyAbort,
@@ -54,7 +54,7 @@ fn convert_shared_password(
     Ok(())
 }
 
-fn get_user_data(path: &str, username: &str) -> Result<UserDataLocked, PasswordManagerError>{
+fn get_user_data(path: &str, username: &str) -> Result<UserDataLocked, PasswordManagerError> {
     if !user_data_exists(path, username) {
         Ok(UserDataLocked::fake())
     } else {
